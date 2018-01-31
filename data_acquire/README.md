@@ -6,8 +6,7 @@
 - Kinect V2: Record data.
 
 ## Description
-- ***(Optional) Human warm up:*** pitcher practices throwing ball to the cube he\/she intend to.
-Make sure the pitcher succeeded at least one time for each cube.
+- ***Humans warm up:*** *Pitcher* practices throwing ball to the cube he\/she intend to. Make sure the pitcher succeeded at least one time for each cube. *Pitcher* practices for his\/her initiating and ending pose. *Control Tower* practices communication with the *Pitcher*.
 - ***(Optional) Computer warm up:*** run `data_capture.m` because first trial usually takes longer to initiate. 
 - **Data collection:** run `record_pitch_data.m` to starting collect data. 3D joint position, color images and depth images 
 will automatically stored.
