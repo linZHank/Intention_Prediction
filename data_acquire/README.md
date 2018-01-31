@@ -18,6 +18,7 @@ into serveral subsets if participants fatigued or lacked enough time to finish a
 come by and play this game:bowtie:
 
 ## Data Collection
+- **Important: Make sure the computer time is correct!**
 - *Control Tower* confirm with the *Pitcher* to get ready of recording experiment trials.
     1. *Control Tower* inform the *Pitcher* which cube was his\/her target
     2. *Pitcher* listen to the auditory cue, and initiate throwing \"duang\" was heard. **Important! *Pitcher* has to stand 
