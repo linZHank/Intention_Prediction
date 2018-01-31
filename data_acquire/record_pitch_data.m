@@ -8,12 +8,12 @@
 %                                                   Created by: LinZ,     %
 %                                                   05/14/2017            %
 %                                                                         %
-%                                               Mod on: 01/24/2018        %
+%                                               Mod on: 01/29/2018        %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Initialize
 clc; clear;
-LOCALDIR = 'D:\Data\pit2d9blk';
+LOCALDIR = 'E:\Data\pit2d9blk';
 % Get experiment information
 ymdhms = clock;
 yr = num2str(ymdhms(1), '%04i');
@@ -39,42 +39,69 @@ while ~isempty(target_pool)
 %         pause;
         disp('GET READY !!!')
         data_capture;
-        actual_target = input('What was the actual target? ');
-        % message about last pitch
-        while ~ismember(actual_target, linspace(1,NUM_TARGET,NUM_TARGET))
+        save_flag = input('Do you want to save data?(y/n): ', 's');
+        if (strcmp(save_flag,'y')) || isempty(save_flag)
             actual_target = input('What was the actual target? ');
-        end
-        if actual_target == intent_target
-            disp('Strike! You hit the target!')
+            if actual_target == intent_target
+                disp('Strike! You hit the target!')
+                %% Reshape data
+                % extract 3d joint positions
+                joint_positions_3d = extractJointPositions3d(metadata_Depth);
+                % resize color images
+                color_img = imresize(imgColor, SCALE);
+                % resize depth images
+                depth_img = imgDepth;
+
+                %% Save_date;
+                % save joint positions
+                dest_dir_joint = [LOCALDIR, '\joint\intent', num2str(intent_target,'%02i'),...
+                    '\', ID, '\', TIME_STAMP, '_trial', num2str(counter, '%02i')];
+                if ~exist(dest_dir_joint, 'dir')
+                    mkdir(dest_dir_joint);
+                end
+                save([dest_dir_joint, '\joint_positions_3d.mat'], 'joint_positions_3d')
+                % save color images
+                dest_dir_color = [LOCALDIR, '\color\intent', num2str(intent_target,'%02i'),...
+                    '\', ID, '\', TIME_STAMP, '_trial', num2str(counter, '%02i')];
+                saveImages(dest_dir_color, color_img, TIME_STAMP);
+                % save depth images
+                dest_dir_depth = [LOCALDIR, '\depth\intent', num2str(intent_target,'%02i'),...
+                    '\', ID, '\', TIME_STAMP, '_trial', num2str(counter, '%02i')];
+                saveImages(dest_dir_depth, depth_img, TIME_STAMP);
+            else
+                fprintf('Oops, you missed the target... Please aim at target %d.\n', intent_target)
+                %% Reshape data
+                % extract 3d joint positions
+                joint_positions_3d = extractJointPositions3d(metadata_Depth);
+                % resize color images
+                color_img = imresize(imgColor, SCALE);
+                % resize depth images
+                depth_img = imgDepth;
+
+                %% Save_date;
+                % save joint positions
+                dest_dir_joint = [LOCALDIR, 'miss\joint\intent', num2str(intent_target,'%02i'),...
+                    '\', ID, '\trial', '_', TIME_STAMP, '_trial', num2str(counter, '%02i'),...
+                    '\actual', num2str(actual_target,'%02i')];
+                if ~exist(dest_dir_joint, 'dir')
+                    mkdir(dest_dir_joint);
+                end
+                save([dest_dir_joint, '\joint_positions_3d.mat'], 'joint_positions_3d')
+                % save color images
+                dest_dir_color = [LOCALDIR, 'miss\color\intent', num2str(intent_target,'%02i'),...
+                    '\', ID, '\', TIME_STAMP, '_trial', num2str(counter, '%02i'),...
+                    '\actual', num2str(actual_target,'%02i')];
+                saveImages(dest_dir_color, color_img, TIME_STAMP);
+                % save depth images
+                dest_dir_depth = [LOCALDIR, 'miss\depth\intent', num2str(intent_target,'%02i'),...
+                    '\', ID, '\', TIME_STAMP, '_trial', num2str(counter, '%02i'),...
+                    '\actual', num2str(actual_target,'%02i')];
+                saveImages(dest_dir_depth, depth_img, TIME_STAMP);
+            end
+            counter = counter+1;
         else
-            fprintf('Oops, you missed the target... Please aim at target %d.\n', intent_target)
+            fprintf('Your data has been discarded! Please aim at target %d.\n', intent_target')
         end
-        counter = counter+1;
-        
-        %% Reshape data
-        % extract 3d joint positions
-        joint_positions_3d = extractJointPositions3d(metadata_Depth);
-        % resize color images
-        color_img = imresize(imgColor, SCALE);
-        % resize depth images
-        depth_img = imgDepth; 
-        
-        %% Save_date;
-        % save joint positions
-        dest_dir_joint = [LOCALDIR, '\joint\intent', num2str(intent_target,'%02i'),...
-            '\', ID, '\trial', '_', TIME_STAMP, '\actual', num2str(actual_target,'%02i')];
-        if ~exist(dest_dir_joint, 'dir')
-            mkdir(dest_dir_joint);
-        end
-        save([dest_dir_joint, '\joint_positions_3d.mat'], 'joint_positions_3d')
-        % save color images 
-        dest_dir_color = [LOCALDIR, '\color\intent', num2str(intent_target,'%02i'),...
-            '\', ID, '\trial', '_', TIME_STAMP, '\actual', num2str(actual_target,'%02i')];
-        saveImages(dest_dir_color, color_img, TIME_STAMP);
-        % save depth images
-        dest_dir_depth = [LOCALDIR, '\depth\intent', num2str(intent_target,'%02i'),...
-            '\', ID, '\trial', '_', TIME_STAMP, '\actual', num2str(actual_target,'%02i')];
-        saveImages(dest_dir_depth, depth_img, TIME_STAMP);        
     end
     target_pool = new_target_pool;
 end
@@ -91,7 +118,6 @@ fprintf('Congrats! you are done, your have attemped %d times to finish the test\
     
     
     
-
 
 
 
