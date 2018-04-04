@@ -3,7 +3,7 @@
 The raw ImageNet data set is expected to reside in JPEG files located in the
 following directory structure.
 
-  data_dir/n01440764/ILSVRC2012_val_00000293.JPEG
+  data_dir/.../.../*.PNG
   data_dir/n01440764/ILSVRC2012_val_00000543.JPEG
   ...
 
