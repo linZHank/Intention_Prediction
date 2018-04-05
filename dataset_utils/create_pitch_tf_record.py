@@ -1,72 +1,71 @@
 """Converts Pitch2d data to TFRecords file format with Example protos.
 
-The raw ImageNet data set is expected to reside in JPEG files located in the
+The raw Pitch2d data set is expected to reside in PNG files located in the
 following directory structure.
 
-  data_dir/.../.../*.PNG
-  data_dir/n01440764/ILSVRC2012_val_00000543.JPEG
+  data_dir/intent##/ID/datetime_trial##/trial_datetime_frame_####.png
+  e.g.: /data_dir/intent02/ZL/201801302254_trial08/trial_201801302254_frame0045.png
   ...
 
-where 'n01440764' is the unique synset label associated with
+where 'intent##' is the unique label associated with
 these images.
 
-The training data set consists of 1000 sub-directories (i.e. labels)
-each containing 1200 JPEG images for a total of 1.2M JPEG images.
+The training data set consists of 9 sub-directories (i.e. labels)
+each containing 1080 PNG images for a total of 9720 PNG images.
 
-The evaluation data set consists of 1000 sub-directories (i.e. labels)
-each containing 50 JPEG images for a total of 50K JPEG images.
+The evaluation data set consists of 9 sub-directories (i.e. labels)
+each containing 380 PNG images for a total of 3420 PNG images.
 
-This TensorFlow script converts the training and evaluation data into
-a sharded data set consisting of 1024 and 128 TFRecord files, respectively.
+The testing data set consists of 9 sub-directories (i.e. labels)
+each containing 380 PNG images for a total of 3420 PNG images.
 
-  train_directory/train-00000-of-01024
-  train_directory/train-00001-of-01024
+This TensorFlow script converts the training, evaluation and testing data into
+a sharded data set consisting of 16, 8 and 8 TFRecord files, respectively.
+
+  train_directory/train-00-of-16
+  train_directory/train-01-of-16
   ...
-  train_directory/train-01023-of-01024
+  train_directory/train-16-of-16
 
 and
 
-  validation_directory/validation-00000-of-00128
-  validation_directory/validation-00001-of-00128
+  validation_directory/validation-00-of-08
+  validation_directory/validation-01-of-08
   ...
-  validation_directory/validation-00127-of-00128
+  validation_directory/validation-08-of-08
 
-Each validation TFRecord file contains ~390 records. Each training TFREcord
-file contains ~1250 records. Each record within the TFRecord file is a
-serialized Example proto. The Example proto contains the following fields:
+and
 
-  image/encoded: string containing JPEG encoded image in RGB colorspace
+  test_directory/test-00-of-08
+  test_directory/test-01-of-08
+  ...
+  test_directory/test-08-of-08
+
+
+Each training TFRecord file contains ~608 records. Each validation TFRecord 
+file contains ~428 records. Each testing TFRecord file contains ~428 records. 
+Each record within the TFRecord file is a serialized Example proto. 
+The Example proto contains the following fields:
+
+  image/encoded: string containing PNG encoded image in RGB colorspace
   image/height: integer, image height in pixels
   image/width: integer, image width in pixels
   image/colorspace: string, specifying the colorspace, always 'RGB'
   image/channels: integer, specifying the number of channels, always 3
-  image/format: string, specifying the format, always 'JPEG'
+  image/format: string, specifying the format, always 'JPEG' or 'PNG'
 
   image/filename: string containing the basename of the image file
-            e.g. 'n01440764_10026.JPEG' or 'ILSVRC2012_val_00000293.JPEG'
+            e.g. 'trial_201801302254_frame0045.png'
   image/class/label: integer specifying the index in a classification layer.
-    The label ranges from [1, 1000] where 0 is not used.
-  image/class/synset: string specifying the unique ID of the label,
-    e.g. 'n01440764'
-  image/class/text: string specifying the human-readable version of the label
-    e.g. 'red fox, Vulpes vulpes'
+    The label ranges from [1, 9] where 0 is not used.
+  image/class/pid: string specifying the unique ID of the pitcher,
+    e.g. 'ZL'
 
-  image/object/bbox/xmin: list of integers specifying the 0+ human annotated
-    bounding boxes
-  image/object/bbox/xmax: list of integers specifying the 0+ human annotated
-    bounding boxes
-  image/object/bbox/ymin: list of integers specifying the 0+ human annotated
-    bounding boxes
-  image/object/bbox/ymax: list of integers specifying the 0+ human annotated
-    bounding boxes
-  image/object/bbox/label: integer specifying the index in a classification
-    layer. The label ranges from [1, 1000] where 0 is not used. Note this is
-    always identical to the image label.
+Running this script using 8 threads may take around ~? hours 
+on an Alienware Aurora R6.
 
-Note that the length of xmin is identical to the length of xmax, ymin and ymax
-for each example.
-
-Running this script using 16 threads may take around ~2.5 hours on an HP Z420.
+Running this script using 16 threads may take around ~? hours 
+on an Threadripper 1900X + ASRock X399 Taichi.
 """
 from __future__ import absolute_import
 from __future__ import division
@@ -86,6 +85,8 @@ tf.app.flags.DEFINE_string('train_directory', '/tmp/',
                            'Training data directory')
 tf.app.flags.DEFINE_string('validation_directory', '/tmp/',
                            'Validation data directory')
+tf.app.flags.DEFINE_string('test_directory', '/tmp/',
+                           'Test data directory')
 tf.app.flags.DEFINE_string('output_directory', '/tmp/',
                            'Output data directory')
 
@@ -525,149 +526,16 @@ def _find_image_files(data_dir, labels_file):
   return filenames, synsets, labels
 
 
-def _find_human_readable_labels(synsets, synset_to_human):
-  """Build a list of human-readable labels.
-
-  Args:
-    synsets: list of strings; each string is a unique WordNet ID.
-    synset_to_human: dict of synset to human labels, e.g.,
-      'n02119022' --> 'red fox, Vulpes vulpes'
-
-  Returns:
-    List of human-readable strings corresponding to each synset.
-  """
-  humans = []
-  for s in synsets:
-    assert s in synset_to_human, ('Failed to find: %s' % s)
-    humans.append(synset_to_human[s])
-  return humans
-
-
-def _find_image_bounding_boxes(filenames, image_to_bboxes):
-  """Find the bounding boxes for a given image file.
-
-  Args:
-    filenames: list of strings; each string is a path to an image file.
-    image_to_bboxes: dictionary mapping image file names to a list of
-      bounding boxes. This list contains 0+ bounding boxes.
-  Returns:
-    List of bounding boxes for each image. Note that each entry in this
-    list might contain from 0+ entries corresponding to the number of bounding
-    box annotations for the image.
-  """
-  num_image_bbox = 0
-  bboxes = []
-  for f in filenames:
-    basename = os.path.basename(f)
-    if basename in image_to_bboxes:
-      bboxes.append(image_to_bboxes[basename])
-      num_image_bbox += 1
-    else:
-      bboxes.append([])
-  print('Found %d images with bboxes out of %d images' % (
-      num_image_bbox, len(filenames)))
-  return bboxes
-
-
-def _process_dataset(name, directory, num_shards, synset_to_human,
-                     image_to_bboxes):
+def _process_dataset(name, directory, num_shards):
   """Process a complete data set and save it as a TFRecord.
 
   Args:
     name: string, unique identifier specifying the data set.
     directory: string, root path to the data set.
     num_shards: integer number of shards for this data set.
-    synset_to_human: dict of synset to human labels, e.g.,
-      'n02119022' --> 'red fox, Vulpes vulpes'
-    image_to_bboxes: dictionary mapping image file names to a list of
-      bounding boxes. This list contains 0+ bounding boxes.
   """
-  filenames, synsets, labels = _find_image_files(directory, FLAGS.labels_file)
-  humans = _find_human_readable_labels(synsets, synset_to_human)
-  bboxes = _find_image_bounding_boxes(filenames, image_to_bboxes)
-  _process_image_files(name, filenames, synsets, labels,
-                       humans, bboxes, num_shards)
-
-
-def _build_synset_lookup(imagenet_metadata_file):
-  """Build lookup for synset to human-readable label.
-
-  Args:
-    imagenet_metadata_file: string, path to file containing mapping from
-      synset to human-readable label.
-
-      Assumes each line of the file looks like:
-
-        n02119247    black fox
-        n02119359    silver fox
-        n02119477    red fox, Vulpes fulva
-
-      where each line corresponds to a unique mapping. Note that each line is
-      formatted as <synset>\t<human readable label>.
-
-  Returns:
-    Dictionary of synset to human labels, such as:
-      'n02119022' --> 'red fox, Vulpes vulpes'
-  """
-  lines = tf.gfile.FastGFile(imagenet_metadata_file, 'r').readlines()
-  synset_to_human = {}
-  for l in lines:
-    if l:
-      parts = l.strip().split('\t')
-      assert len(parts) == 2
-      synset = parts[0]
-      human = parts[1]
-      synset_to_human[synset] = human
-  return synset_to_human
-
-
-def _build_bounding_box_lookup(bounding_box_file):
-  """Build a lookup from image file to bounding boxes.
-
-  Args:
-    bounding_box_file: string, path to file with bounding boxes annotations.
-
-      Assumes each line of the file looks like:
-
-        n00007846_64193.JPEG,0.0060,0.2620,0.7545,0.9940
-
-      where each line corresponds to one bounding box annotation associated
-      with an image. Each line can be parsed as:
-
-        <JPEG file name>, <xmin>, <ymin>, <xmax>, <ymax>
-
-      Note that there might exist mulitple bounding box annotations associated
-      with an image file. This file is the output of process_bounding_boxes.py.
-
-  Returns:
-    Dictionary mapping image file names to a list of bounding boxes. This list
-    contains 0+ bounding boxes.
-  """
-  lines = tf.gfile.FastGFile(bounding_box_file, 'r').readlines()
-  images_to_bboxes = {}
-  num_bbox = 0
-  num_image = 0
-  for l in lines:
-    if l:
-      parts = l.split(',')
-      assert len(parts) == 5, ('Failed to parse: %s' % l)
-      filename = parts[0]
-      xmin = float(parts[1])
-      ymin = float(parts[2])
-      xmax = float(parts[3])
-      ymax = float(parts[4])
-      box = [xmin, ymin, xmax, ymax]
-
-      if filename not in images_to_bboxes:
-        images_to_bboxes[filename] = []
-        num_image += 1
-      images_to_bboxes[filename].append(box)
-      num_bbox += 1
-
-  print('Successfully read %d bounding boxes '
-        'across %d images.' % (num_bbox, num_image))
-  return images_to_bboxes
-
+  filenames, labels = _find_image_files(directory, FLAGS.labels_file)
+  _process_image_files(name, filenames, labels, num_shards)
 
 def main(unused_argv):
   assert not FLAGS.train_shards % FLAGS.num_threads, (
@@ -675,17 +543,17 @@ def main(unused_argv):
   assert not FLAGS.validation_shards % FLAGS.num_threads, (
       'Please make the FLAGS.num_threads commensurate with '
       'FLAGS.validation_shards')
+  assert not FLAGS.test_shards % FLAGS.num_threads, (
+      'Please make the FLAGS.num_threads commensurate with '
+      'FLAGS.test_shards')
   print('Saving results to %s' % FLAGS.output_directory)
-
-  # Build a map from synset to human-readable label.
-  synset_to_human = _build_synset_lookup(FLAGS.imagenet_metadata_file)
-  image_to_bboxes = _build_bounding_box_lookup(FLAGS.bounding_box_file)
 
   # Run it!
   _process_dataset('validation', FLAGS.validation_directory,
                    FLAGS.validation_shards, synset_to_human, image_to_bboxes)
   _process_dataset('train', FLAGS.train_directory, FLAGS.train_shards,
                    synset_to_human, image_to_bboxes)
+  _process_dataset('test', FLAGS.test_directory, FLAGS.test_shards, pitcher_id)
 
 
 if __name__ == '__main__':
