@@ -451,64 +451,74 @@ def _process_image_files(name, filenames, synsets, labels, humans,
   sys.stdout.flush()
 
 
-def _find_image_files(data_dir, labels_file):
+def _find_image_files(data_dir, labels):
   """Build a list of all images files and labels in the data set.
 
   Args:
     data_dir: string, path to the root directory of images.
 
-      Assumes that the ImageNet data set resides in JPEG files located in
+      Assumes that the ImageNet data set resides in PNG files located in
       the following directory structure.
 
-        data_dir/n01440764/ILSVRC2012_val_00000293.JPEG
-        data_dir/n01440764/ILSVRC2012_val_00000543.JPEG
+        data_dir/intent##/ID/datetime_trial##/trial_datetime_frame_####.png
 
-      where 'n01440764' is the unique synset label associated with these images.
+    labels: list of labels grab from .
 
-    labels_file: string, path to the labels file.
-
-      The list of valid labels are held in this file. Assumes that the file
-      contains entries as such:
-        n01440764
-        n01443537
-        n01484850
-      where each line corresponds to a label expressed as a synset. We map
-      each synset contained in the file to an integer (based on the alphabetical
-      ordering) starting with the integer 1 corresponding to the synset
-      contained in the first line.
-
-      The reason we start the integer labels at 1 is to reserve label 0 as an
+      We start the integer labels at 1 is to reserve label 0 as an
       unused background class.
 
   Returns:
     filenames: list of strings; each string is a path to an image file.
-    synsets: list of strings; each string is a unique WordNet ID.
     labels: list of integer; each integer identifies the ground truth.
   """
   print('Determining list of input files and labels from %s.' % data_dir)
-  challenge_synsets = [l.strip() for l in
-                       tf.gfile.FastGFile(labels_file, 'r').readlines()]
+  # Prepare training, validation and test data 
+  train_paths = []
+  val_paths = []
+  test_paths = []
 
+  train_labels = []
+  val_labels = []
+  test_labels = []
+
+  intents = []
   labels = []
   filenames = []
-  synsets = []
 
   # Leave label index 0 empty as a background class.
   label_index = 1
 
-  # Construct the list of JPEG files and labels.
-  for synset in challenge_synsets:
-    jpeg_file_path = '%s/%s/*.JPEG' % (data_dir, synset)
-    matching_files = tf.gfile.Glob(jpeg_file_path)
+  # Construct the list of PNG files and labels.
+  intent_paths = glob.glob(data_dir+'/*')
+  for ipath in intent_paths:
+    intent = ipath.split('/')[-1]
+    intents.append(intent)
+    labels.append(label_index)
 
-    labels.extend([label_index] * len(matching_files))
-    synsets.extend([synset] * len(matching_files))
-    filenames.extend(matching_files)
+    pitcher_paths = glob.glob(ipath+'/*')
+    for ppath in pitcher_paths:
+      trial_paths = glob.glob(ppath+'/*')
+      np.random.shuffle(trial_paths) # shuffle all 10 trials, before travaltes arrangement
+      #separate images to train, val, test (travaltes), 6/2/2
+      train_trial_paths = trial_paths[:int(0.6*len(trial_paths))]
+      val_trial_paths = trial_paths[int(0.6*len(trial_paths)):int(0.8*len(trial_paths))]
+      test_trial_paths = trial_paths[int(0.8*len(trial_paths)):]
+      for trntrlpath in train_trial_paths:
+        train_img_paths = glob.glob(trntrlpath+'/*.png')
+        train_paths += train_img_paths
+        train_labels += [label_index] * len(train_img_paths)
+        for valtrlpath in val_trial_paths:
+          val_img_paths = glob.glob(valtrlpath+'/*.png')
+          val_labels += val_img_paths
+          val_labels += [label_index] * len(val_img_paths)
+          for testrlpath in test_trial_paths:
+            test_img_paths = glob.glob(testrlpath+'/*.png')
+            test_labels += test_img_paths
+            test_labels += [label_index] * len(test_img_paths)
 
-    if not label_index % 100:
-      print('Finished finding files in %d of %d classes.' % (
-          label_index, len(challenge_synsets)))
-    label_index += 1
+    # Construct the list of PNG files and labels
+    print('Finished finding files in %d of %d classes.' % (intent))
+    label_index += 1 # label index increase when investigating new intent
 
   # Shuffle the ordering of all image files in order to guarantee
   # random ordering of the images with respect to label in the
