@@ -73,13 +73,18 @@ from __future__ import print_function
 
 from datetime import datetime
 import os
+import glob
 import random
 import sys
 import threading
 
 import numpy as np
+import scipy.io as spio
 import six
 import tensorflow as tf
+
+
+DATA_DIR = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
 
 tf.app.flags.DEFINE_string('train_directory', '/tmp/',
                            'Training data directory')
@@ -97,47 +102,6 @@ tf.app.flags.DEFINE_integer('validation_shards', 128,
 
 tf.app.flags.DEFINE_integer('num_threads', 8,
                             'Number of threads to preprocess the images.')
-
-# The labels file contains a list of valid labels are held in this file.
-# Assumes that the file contains entries as such:
-#   n01440764
-#   n01443537
-#   n01484850
-# where each line corresponds to a label expressed as a synset. We map
-# each synset contained in the file to an integer (based on the alphabetical
-# ordering). See below for details.
-tf.app.flags.DEFINE_string('labels_file',
-                           'imagenet_lsvrc_2015_synsets.txt',
-                           'Labels file')
-
-# This file containing mapping from synset to human-readable label.
-# Assumes each line of the file looks like:
-#
-#   n02119247    black fox
-#   n02119359    silver fox
-#   n02119477    red fox, Vulpes fulva
-#
-# where each line corresponds to a unique mapping. Note that each line is
-# formatted as <synset>\t<human readable label>.
-tf.app.flags.DEFINE_string('imagenet_metadata_file',
-                           'imagenet_metadata.txt',
-                           'ImageNet metadata file')
-
-# This file is the output of process_bounding_box.py
-# Assumes each line of the file looks like:
-#
-#   n00007846_64193.JPEG,0.0060,0.2620,0.7545,0.9940
-#
-# where each line corresponds to one bounding box annotation associated
-# with an image. Each line can be parsed as:
-#
-#   <JPEG file name>, <xmin>, <ymin>, <xmax>, <ymax>
-#
-# Note that there might exist mulitple bounding box annotations associated
-# with an image file.
-tf.app.flags.DEFINE_string('bounding_box_file',
-                           './imagenet_2012_bounding_boxes.csv',
-                           'Bounding box file')
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -163,8 +127,7 @@ def _bytes_feature(value):
   return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
-def _convert_to_example(filename, image_buffer, label, synset, human, bbox,
-                        height, width):
+def _convert_to_example(filename, image_buffer, label, height, width):
   """Build an Example proto for an example.
 
   Args:
@@ -181,16 +144,6 @@ def _convert_to_example(filename, image_buffer, label, synset, human, bbox,
   Returns:
     Example proto
   """
-  xmin = []
-  ymin = []
-  xmax = []
-  ymax = []
-  for b in bbox:
-    assert len(b) == 4
-    # pylint: disable=expression-not-assigned
-    [l.append(point) for l, point in zip([xmin, ymin, xmax, ymax], b)]
-    # pylint: enable=expression-not-assigned
-
   colorspace = 'RGB'
   channels = 3
   image_format = 'JPEG'
@@ -201,13 +154,6 @@ def _convert_to_example(filename, image_buffer, label, synset, human, bbox,
       'image/colorspace': _bytes_feature(colorspace),
       'image/channels': _int64_feature(channels),
       'image/class/label': _int64_feature(label),
-      'image/class/synset': _bytes_feature(synset),
-      'image/class/text': _bytes_feature(human),
-      'image/object/bbox/xmin': _float_feature(xmin),
-      'image/object/bbox/xmax': _float_feature(xmax),
-      'image/object/bbox/ymin': _float_feature(ymin),
-      'image/object/bbox/ymax': _float_feature(ymax),
-      'image/object/bbox/label': _int64_feature([label] * len(xmin)),
       'image/format': _bytes_feature(image_format),
       'image/filename': _bytes_feature(os.path.basename(filename)),
       'image/encoded': _bytes_feature(image_buffer)}))
@@ -251,45 +197,6 @@ class ImageCoder(object):
     return image
 
 
-def _is_png(filename):
-  """Determine if a file contains a PNG format image.
-
-  Args:
-    filename: string, path of the image file.
-
-  Returns:
-    boolean indicating if the image is a PNG.
-  """
-  # File list from:
-  # https://groups.google.com/forum/embed/?place=forum/torch7#!topic/torch7/fOSTXHIESSU
-  return 'n02105855_2933.JPEG' in filename
-
-
-def _is_cmyk(filename):
-  """Determine if file contains a CMYK JPEG format image.
-
-  Args:
-    filename: string, path of the image file.
-
-  Returns:
-    boolean indicating if the image is a JPEG encoded with CMYK color space.
-  """
-  # File list from:
-  # https://github.com/cytsai/ilsvrc-cmyk-image-list
-  blacklist = ['n01739381_1309.JPEG', 'n02077923_14822.JPEG',
-               'n02447366_23489.JPEG', 'n02492035_15739.JPEG',
-               'n02747177_10752.JPEG', 'n03018349_4028.JPEG',
-               'n03062245_4620.JPEG', 'n03347037_9675.JPEG',
-               'n03467068_12171.JPEG', 'n03529860_11437.JPEG',
-               'n03544143_17228.JPEG', 'n03633091_5218.JPEG',
-               'n03710637_5125.JPEG', 'n03961711_5286.JPEG',
-               'n04033995_2932.JPEG', 'n04258138_17003.JPEG',
-               'n04264628_27969.JPEG', 'n04336792_7448.JPEG',
-               'n04371774_5854.JPEG', 'n04596742_4225.JPEG',
-               'n07583066_647.JPEG', 'n13037406_4650.JPEG']
-  return filename.split('/')[-1] in blacklist
-
-
 def _process_image(filename, coder):
   """Process a single image file.
 
@@ -327,8 +234,7 @@ def _process_image(filename, coder):
   return image_data, height, width
 
 
-def _process_image_files_batch(coder, thread_index, ranges, name, filenames,
-                               synsets, labels, humans, bboxes, num_shards):
+def _process_image_files_batch(coder, thread_index, ranges, name, filenames, labels, num_shards):
   """Processes and saves list of images as TFRecord in 1 thread.
 
   Args:
@@ -338,12 +244,7 @@ def _process_image_files_batch(coder, thread_index, ranges, name, filenames,
       analyze in parallel.
     name: string, unique identifier specifying the data set
     filenames: list of strings; each string is a path to an image file
-    synsets: list of strings; each string is a unique WordNet ID
     labels: list of integer; each integer identifies the ground truth
-    humans: list of strings; each string is a human-readable label
-    bboxes: list of bounding boxes for each image. Note that each entry in this
-      list might contain from 0+ entries corresponding to the number of bounding
-      box annotations for the image.
     num_shards: integer number of shards for this data set.
   """
   # Each thread produces N shards where N = int(num_shards / num_threads).
@@ -450,8 +351,27 @@ def _process_image_files(name, filenames, synsets, labels, humans,
         (datetime.now(), len(filenames)))
   sys.stdout.flush()
 
+def find_pitch_init(joint_path, intent, pitcher, trial):
+  matfile_path = os.path.join(joint_path, intent, pitcher, trial, '*.mat')
+  matfile_name = glob.glob(matfile_path)[0]
+  joint_position = spio.loadmat(matfile_name)['joint_positions_3d']
+  window_size = 20
+  dist = []
+  for i in range(joint_position.shape[2]):
+    d = np.linalg.norm(joint_position[:,:,i] - joint_position[:,:,0])
+    dist.append(d)
+  inc_inarow = 0
+  di = 0 # index of distance
+  while di < len(dist) and inc_inarow <= window_size:
+    if dist[di+1] > dist[di]:
+      inc_inarow += 1
+    else:
+      inc_inarow = 0
+    di += 1
+  init_frame_id = di - window_size
+  return dist, init_frame_id 
 
-def _find_image_files(data_dir, labels):
+def _find_image_files(data_dir):
   """Build a list of all images files and labels in the data set.
 
   Args:
@@ -459,10 +379,7 @@ def _find_image_files(data_dir, labels):
 
       Assumes that the ImageNet data set resides in PNG files located in
       the following directory structure.
-
         data_dir/intent##/ID/datetime_trial##/trial_datetime_frame_####.png
-
-    labels: list of labels grab from .
 
       We start the integer labels at 1 is to reserve label 0 as an
       unused background class.
@@ -471,6 +388,8 @@ def _find_image_files(data_dir, labels):
     filenames: list of strings; each string is a path to an image file.
     labels: list of integer; each integer identifies the ground truth.
   """
+  color_path = os.path.join(data_dir, 'color')
+  joint_path = os.path.join(data_dir, 'joint')
   print('Determining list of input files and labels from %s.' % data_dir)
   # Prepare training, validation and test data 
   train_paths = []
@@ -489,29 +408,33 @@ def _find_image_files(data_dir, labels):
   label_index = 1
 
   # Construct the list of PNG files and labels.
-  intent_paths = glob.glob(data_dir+'/*')
+  intent_paths = sorted(glob.glob(color_path+'/*'))
   for ipath in intent_paths:
     intent = ipath.split('/')[-1]
     intents.append(intent)
     labels.append(label_index)
 
-    pitcher_paths = glob.glob(ipath+'/*')
+    pitcher_paths = sorted(glob.glob(ipath+'/*'))
     for ppath in pitcher_paths:
-      trial_paths = glob.glob(ppath+'/*')
+      pitcher = ppath.split('/')[-1]
+      trial_paths = sorted(glob.glob(ppath+'/*'))
       np.random.shuffle(trial_paths) # shuffle all 10 trials, before travaltes arrangement
       #separate images to train, val, test (travaltes), 6/2/2
       train_trial_paths = trial_paths[:int(0.6*len(trial_paths))]
       val_trial_paths = trial_paths[int(0.6*len(trial_paths)):int(0.8*len(trial_paths))]
       test_trial_paths = trial_paths[int(0.8*len(trial_paths)):]
-      for trntrlpath in train_trial_paths:
-        train_img_paths = glob.glob(trntrlpath+'/*.png')
+      for trnpath in train_trial_paths:
+        trial = trnpath.split('/')[-1]
+        jpos_dist, init_frmid = find_pitch_init(joint_path, intent, pitcher, trial) # need work on this funcion
+        
+        train_img_paths = sorted(glob.glob(trntrlpath+'/*.png'))[init_frmid:init_frmid+45]
         train_paths += train_img_paths
         train_labels += [label_index] * len(train_img_paths)
-        for valtrlpath in val_trial_paths:
+        for valpath in val_trial_paths:
           val_img_paths = glob.glob(valtrlpath+'/*.png')
           val_labels += val_img_paths
           val_labels += [label_index] * len(val_img_paths)
-          for testrlpath in test_trial_paths:
+          for tespath in test_trial_paths:
             test_img_paths = glob.glob(testrlpath+'/*.png')
             test_labels += test_img_paths
             test_labels += [label_index] * len(test_img_paths)
