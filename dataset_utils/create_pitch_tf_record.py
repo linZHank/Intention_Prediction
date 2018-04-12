@@ -300,7 +300,7 @@ def _process_image_files_batch(coder, thread_index, ranges, name, filenames, lab
   sys.stdout.flush()
 
 
-def _process_image_files(name, filenames, synsets, labels, humans,
+def _process_image_files(name, filenames, labels, humans,
                          bboxes, num_shards):
   """Process and save list of images as TFRecord of Example protos.
 
@@ -315,10 +315,7 @@ def _process_image_files(name, filenames, synsets, labels, humans,
       box annotations for the image.
     num_shards: integer number of shards for this data set.
   """
-  assert len(filenames) == len(synsets)
   assert len(filenames) == len(labels)
-  assert len(filenames) == len(humans)
-  assert len(filenames) == len(bboxes)
 
   # Break all images into batches with a [ranges[i][0], ranges[i][1]].
   spacing = np.linspace(0, len(filenames), FLAGS.num_threads + 1).astype(np.int)
@@ -352,6 +349,19 @@ def _process_image_files(name, filenames, synsets, labels, humans,
   sys.stdout.flush()
 
 def find_pitch_init(joint_path, intent, pitcher, trial):
+  """Find the moment of the initiating of each pitching trial.
+  
+  Args: 
+    joint_path: string, path to the root dirctory of pitch data
+    intent: string, pitching intent with numbers e.g. "intent02"
+    pitcher: string, pitcher's name e.g. "ZL"
+    trial: string, trial id with timestamp e.g. trial_201801302254
+
+  Returns:
+    dist: list of float, each float number indicate the euclidean distance between 
+      joint positions of current frame and joint positions of first frame. 
+    init_frame_id: integer, this number indicate the frame index of the pitching initiation.
+  """
   matfile_path = os.path.join(joint_path, intent, pitcher, trial, '*.mat')
   matfile_name = glob.glob(matfile_path)[0]
   joint_position = spio.loadmat(matfile_name)['joint_positions_3d']
@@ -362,14 +372,14 @@ def find_pitch_init(joint_path, intent, pitcher, trial):
     dist.append(d)
   inc_inarow = 0
   di = 0 # index of distance
-  while di < len(dist) and inc_inarow <= window_size:
+  while di < len(dist)-45 and inc_inarow <= window_size:
     if dist[di+1] > dist[di]:
       inc_inarow += 1
     else:
       inc_inarow = 0
     di += 1
-  init_frame_id = di - window_size
-  return dist, init_frame_id 
+  initframe = di - window_size
+  return dist, initframe 
 
 def _find_image_files(data_dir):
   """Build a list of all images files and labels in the data set.
@@ -385,20 +395,24 @@ def _find_image_files(data_dir):
       unused background class.
 
   Returns:
-    filenames: list of strings; each string is a path to an image file.
-    labels: list of integer; each integer identifies the ground truth.
+    trainpaths: list of strings; each string is a path to an image file.
+    validatepaths: list of strings; each string is a path to an image file.
+    testpaths: list of strings; each string is a path to an image file.
+    trainlabels: list of integer; each integer identifies the ground truth.
+    validatelabels: list of integer; each integer identifies the ground truth.
+    testlabels: list of integer; each integer identifies the ground truth.
   """
   color_path = os.path.join(data_dir, 'color')
   joint_path = os.path.join(data_dir, 'joint')
   print('Determining list of input files and labels from %s.' % data_dir)
   # Prepare training, validation and test data 
-  train_paths = []
-  val_paths = []
-  test_paths = []
+  trainpaths = []
+  validatepaths = []
+  testpaths = []
 
-  train_labels = []
-  val_labels = []
-  test_labels = []
+  trainlabels = []
+  validatelabels = []
+  testlabels = []
 
   intents = []
   labels = []
@@ -425,38 +439,37 @@ def _find_image_files(data_dir):
       test_trial_paths = trial_paths[int(0.8*len(trial_paths)):]
       for trnpath in train_trial_paths:
         trial = trnpath.split('/')[-1]
-        jpos_dist, init_frmid = find_pitch_init(joint_path, intent, pitcher, trial) # need work on this funcion
-        
-        train_img_paths = sorted(glob.glob(trntrlpath+'/*.png'))[init_frmid:init_frmid+45]
-        train_paths += train_img_paths
-        train_labels += [label_index] * len(train_img_paths)
-        for valpath in val_trial_paths:
-          val_img_paths = glob.glob(valtrlpath+'/*.png')
-          val_labels += val_img_paths
-          val_labels += [label_index] * len(val_img_paths)
-          for tespath in test_trial_paths:
-            test_img_paths = glob.glob(testrlpath+'/*.png')
-            test_labels += test_img_paths
-            test_labels += [label_index] * len(test_img_paths)
+        _, init_frmid = find_pitch_init(joint_path, intent, pitcher, trial)
+        train_img_paths = sorted(glob.glob(trnpath+'/*.png'))[init_frmid:init_frmid+45]
+        trainpaths += train_img_paths
+        trainlabels += [label_index] * len(train_img_paths)
+
+      for valpath in val_trial_paths:
+        trial = trnpath.split('/')[-1]
+        _, init_frmid = find_pitch_init(joint_path, intent, pitcher, trial)
+        val_img_paths = sorted(glob.glob(valpath+'/*.png')[init_frmid:init_frmid+45])
+        validatepaths += val_img_paths
+        validatelabels += [label_index] * len(val_img_paths)
+
+      for tespath in test_trial_paths:
+        trial = trnpath.split('/')[-1]
+        _, init_frmid = find_pitch_init(joint_path, intent, pitcher, trial)
+        test_img_paths = sorted(glob.glob(tespath+'/*.png')[init_frmid:init_frmid+45])
+        testpaths += test_img_paths
+        testlabels += [label_index] * len(test_img_paths)
 
     # Construct the list of PNG files and labels
-    print('Finished finding files in %d of %d classes.' % (intent))
+    print('Finished finding files in {}.'.format(intent))
     label_index += 1 # label index increase when investigating new intent
 
-  # Shuffle the ordering of all image files in order to guarantee
-  # random ordering of the images with respect to label in the
-  # saved TFRecord files. Make the randomization repeatable.
-  shuffled_index = list(range(len(filenames)))
-  random.seed(12345)
-  random.shuffle(shuffled_index)
+  print('Found {num_trn} images for training; \nFound {num_val} images for validating; \nFound {num_tes} images for testing.'.format(num_trn=len(trainpaths),
+                                                                                                                                     num_val=len(validatepaths),
+                                                                                                                                     num_tes=len(testpaths)))
 
-  filenames = [filenames[i] for i in shuffled_index]
-  synsets = [synsets[i] for i in shuffled_index]
-  labels = [labels[i] for i in shuffled_index]
+  return trainpaths, validatepaths, testpaths, trainlabels, validatelabels, testlabels
 
-  print('Found %d JPEG files across %d labels inside %s.' %
-        (len(filenames), len(challenge_synsets), data_dir))
-  return filenames, synsets, labels
+
+trainpaths, validatepaths, testpaths, trainlabels, validatelabels, testlabels = _find_image_files(DATA_DIR)
 
 
 def _process_dataset(name, directory, num_shards):
