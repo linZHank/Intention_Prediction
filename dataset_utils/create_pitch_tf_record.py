@@ -167,31 +167,13 @@ class ImageCoder(object):
     # Create a single Session to run all image coding calls.
     self._sess = tf.Session()
 
-    # Initializes function that converts PNG to JPEG data.
-    self._png_data = tf.placeholder(dtype=tf.string)
-    image = tf.image.decode_png(self._png_data, channels=3)
-    self._png_to_jpeg = tf.image.encode_jpeg(image, format='rgb', quality=100)
-
-    # Initializes function that converts CMYK JPEG data to RGB JPEG data.
-    self._cmyk_data = tf.placeholder(dtype=tf.string)
-    image = tf.image.decode_jpeg(self._cmyk_data, channels=0)
-    self._cmyk_to_rgb = tf.image.encode_jpeg(image, format='rgb', quality=100)
-
     # Initializes function that decodes RGB JPEG data.
-    self._decode_jpeg_data = tf.placeholder(dtype=tf.string)
-    self._decode_jpeg = tf.image.decode_jpeg(self._decode_jpeg_data, channels=3)
+    self._decode_image_data = tf.placeholder(dtype=tf.string)
+    self._decode_image = tf.image.decode_image(self._decode_image_data, channels=3)
 
-  def png_to_jpeg(self, image_data):
-    return self._sess.run(self._png_to_jpeg,
-                          feed_dict={self._png_data: image_data})
-
-  def cmyk_to_rgb(self, image_data):
-    return self._sess.run(self._cmyk_to_rgb,
-                          feed_dict={self._cmyk_data: image_data})
-
-  def decode_jpeg(self, image_data):
-    image = self._sess.run(self._decode_jpeg,
-                           feed_dict={self._decode_jpeg_data: image_data})
+  def decode_image(self, image_data):
+    image = self._sess.run(self._decode_image,
+                           feed_dict={self._decode_image_data: image_data})
     assert len(image.shape) == 3
     assert image.shape[2] == 3
     return image
@@ -212,18 +194,8 @@ def _process_image(filename, coder):
   with tf.gfile.FastGFile(filename, 'rb') as f:
     image_data = f.read()
 
-  # Clean the dirty data.
-  if _is_png(filename):
-    # 1 image is a PNG.
-    print('Converting PNG to JPEG for %s' % filename)
-    image_data = coder.png_to_jpeg(image_data)
-  elif _is_cmyk(filename):
-    # 22 JPEG images are in CMYK colorspace.
-    print('Converting CMYK to RGB for %s' % filename)
-    image_data = coder.cmyk_to_rgb(image_data)
-
   # Decode the RGB JPEG.
-  image = coder.decode_jpeg(image_data)
+  image = coder.decode_image(image_data)
 
   # Check that image converted to RGB
   assert len(image.shape) == 3
@@ -234,122 +206,77 @@ def _process_image(filename, coder):
   return image_data, height, width
 
 
-def _process_image_files_batch(coder, thread_index, ranges, name, filenames, labels, num_shards):
-  """Processes and saves list of images as TFRecord in 1 thread.
+def _process_image_files_shards(coder, ranges, filenames, labels, num_shards):
+  """Processes and saves list of images as TFRecord in 1 shard.
 
   Args:
     coder: instance of ImageCoder to provide TensorFlow image coding utils.
-    thread_index: integer, unique batch to run index is within [0, len(ranges)).
-    ranges: list of pairs of integers specifying ranges of each batches to
-      analyze in parallel.
-    name: string, unique identifier specifying the data set
+    ranges: list of pairs of integers specifying ranges of each shard.
     filenames: list of strings; each string is a path to an image file
     labels: list of integer; each integer identifies the ground truth
     num_shards: integer number of shards for this data set.
   """
-  # Each thread produces N shards where N = int(num_shards / num_threads).
-  # For instance, if num_shards = 128, and the num_threads = 2, then the first
-  # thread would produce shards [0, 64).
-  num_threads = len(ranges)
-  assert not num_shards % num_threads
-  num_shards_per_batch = int(num_shards / num_threads)
+  # 
+  num_files_in_shard = ranges[1] - ranges[thread_index][0]
 
-  shard_ranges = np.linspace(ranges[thread_index][0],
-                             ranges[thread_index][1],
-                             num_shards_per_batch + 1).astype(int)
-  num_files_in_thread = ranges[thread_index][1] - ranges[thread_index][0]
-
-  counter = 0
-  for s in range(num_shards_per_batch):
+  for s in range(num_shards):
     # Generate a sharded version of the file name, e.g. 'train-00002-of-00010'
-    shard = thread_index * num_shards_per_batch + s
-    output_filename = '%s-%.5d-of-%.5d' % (name, shard, num_shards)
+    output_filename = "{}-{:05d}-of-{:05d}".format(name, shard, num_shards)
     output_file = os.path.join(FLAGS.output_directory, output_filename)
     writer = tf.python_io.TFRecordWriter(output_file)
 
     shard_counter = 0
-    files_in_shard = np.arange(shard_ranges[s], shard_ranges[s + 1], dtype=int)
-    for i in files_in_shard:
+    indices_in_shard = np.arange(ranges[s][0], ranges[s][1], dtype=int)
+    labels_in_shard = labels[ranges[s][0]:ranges[s][1]]
+    counter = 0
+    for i in indices_in_shard:
       filename = filenames[i]
       label = labels[i]
-      synset = synsets[i]
-      human = humans[i]
-      bbox = bboxes[i]
 
       image_buffer, height, width = _process_image(filename, coder)
 
-      example = _convert_to_example(filename, image_buffer, label,
-                                    synset, human, bbox,
-                                    height, width)
+      example = _convert_to_example(filename, image_buffer, label, height, width)
       writer.write(example.SerializeToString())
-      shard_counter += 1
       counter += 1
 
-      if not counter % 1000:
-        print('%s [thread %d]: Processed %d of %d images in thread batch.' %
-              (datetime.now(), thread_index, counter, num_files_in_thread))
-        sys.stdout.flush()
+      print("{} [ shard-{:d}]: Processed {:d} of {:d} images in shard.".format
+              (datetime.now(), s, counter, len(indices_in_shard)))
+      sys.stdout.flush()
 
     writer.close()
-    print('%s [thread %d]: Wrote %d images to %s' %
-          (datetime.now(), thread_index, shard_counter, output_file))
+    shard_counter += 1
+    print("==== {} [shard-{:d}] wrote to {}".format
+          (datetime.now(), shard_counter, output_file))
     sys.stdout.flush()
-    shard_counter = 0
-  print('%s [thread %d]: Wrote %d images to %d shards.' %
-        (datetime.now(), thread_index, counter, num_files_in_thread))
-  sys.stdout.flush()
 
 
-def _process_image_files(name, filenames, labels, humans,
-                         bboxes, num_shards):
+def _process_image_files(filenames, labels, num_shards):
   """Process and save list of images as TFRecord of Example protos.
 
   Args:
-    name: string, unique identifier specifying the data set
     filenames: list of strings; each string is a path to an image file
-    synsets: list of strings; each string is a unique WordNet ID
     labels: list of integer; each integer identifies the ground truth
-    humans: list of strings; each string is a human-readable label
-    bboxes: list of bounding boxes for each image. Note that each entry in this
-      list might contain from 0+ entries corresponding to the number of bounding
-      box annotations for the image.
     num_shards: integer number of shards for this data set.
   """
   assert len(filenames) == len(labels)
 
   # Break all images into batches with a [ranges[i][0], ranges[i][1]].
-  spacing = np.linspace(0, len(filenames), FLAGS.num_threads + 1).astype(np.int)
+  spacing = np.linspace(0, len(filenames), num_shards + 1).astype(np.int)
   ranges = []
-  threads = []
   for i in range(len(spacing) - 1):
     ranges.append([spacing[i], spacing[i + 1]])
-
-  # Launch a thread for each batch.
-  print('Launching %d threads for spacings: %s' % (FLAGS.num_threads, ranges))
-  sys.stdout.flush()
-
-  # Create a mechanism for monitoring when all threads are finished.
-  coord = tf.train.Coordinator()
 
   # Create a generic TensorFlow-based utility for converting all image codings.
   coder = ImageCoder()
 
-  threads = []
-  for thread_index in range(len(ranges)):
-    args = (coder, thread_index, ranges, name, filenames,
-            synsets, labels, humans, bboxes, num_shards)
-    t = threading.Thread(target=_process_image_files_batch, args=args)
-    t.start()
-    threads.append(t)
+  # create tfrecord shard by shard
+  _process_image_files_batch(coder, ranges, filenames, labels, num_shards)
 
-  # Wait for all the threads to terminate.
-  coord.join(threads)
-  print('%s: Finished writing all %d images in data set.' %
-        (datetime.now(), len(filenames)))
+  print('{} Finished writing all {} images in data set.'.format(datetime.now(), len(filenames)))
   sys.stdout.flush()
 
 def find_pitch_init(joint_path, intent, pitcher, trial):
-  """Find the moment of the initiating of each pitching trial.
+  """Find the initiating moment of each pitching trial.
   
   Args: 
     joint_path: string, path to the root dirctory of pitch data
@@ -467,9 +394,6 @@ def _find_image_files(data_dir):
                                                                                                                                      num_tes=len(testpaths)))
 
   return trainpaths, validatepaths, testpaths, trainlabels, validatelabels, testlabels
-
-
-trainpaths, validatepaths, testpaths, trainlabels, validatelabels, testlabels = _find_image_files(DATA_DIR)
 
 
 def _process_dataset(name, directory, num_shards):
