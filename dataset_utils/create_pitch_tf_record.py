@@ -127,18 +127,17 @@ def _bytes_feature(value):
   return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
-def _convert_to_example(filename, image_buffer, label, height, width):
+def _convert_to_example(filename, image_buffer, label,
+                        pitcher, trial, frame, height, width):
   """Build an Example proto for an example.
 
   Args:
-    filename: string, path to an image file, e.g., '/path/to/example.JPG'
-    image_buffer: string, JPEG encoding of RGB image
+    filename: string, path to an image file, e.g., '/path/to/example.PNG'
+    image_buffer: string, encoding of RGB image
     label: integer, identifier for the ground truth for the network
-    synset: string, unique WordNet ID specifying the label, e.g., 'n02323233'
-    human: string, human-readable label, e.g., 'red fox, Vulpes vulpes'
-    bbox: list of bounding boxes; each box is a list of integers
-      specifying [xmin, ymin, xmax, ymax]. All boxes are assumed to belong to
-      the same label as the image label.
+    pitcher: string, pitcher's name
+    trial: string, trial name
+    frame: integer, frame index between 1 and 90
     height: integer, image height in pixels
     width: integer, image width in pixels
   Returns:
@@ -146,7 +145,7 @@ def _convert_to_example(filename, image_buffer, label, height, width):
   """
   colorspace = 'RGB'
   channels = 3
-  image_format = 'JPEG'
+  image_format = 'PNG'
 
   example = tf.train.Example(features=tf.train.Features(feature={
       'image/height': _int64_feature(height),
@@ -154,6 +153,9 @@ def _convert_to_example(filename, image_buffer, label, height, width):
       'image/colorspace': _bytes_feature(colorspace),
       'image/channels': _int64_feature(channels),
       'image/class/label': _int64_feature(label),
+      'image/class/pitcher': _bytes_feature(pitcher),
+      'image/trial': _bytes_feature(trial),
+      'image/frame': _int64_feature(frame),
       'image/format': _bytes_feature(image_format),
       'image/filename': _bytes_feature(os.path.basename(filename)),
       'image/encoded': _bytes_feature(image_buffer)}))
@@ -206,18 +208,20 @@ def _process_image(filename, coder):
   return image_data, height, width
 
 
-def _process_image_files_shards(coder, ranges, filenames, labels, num_shards):
+def _process_image_files_shards(name, coder, ranges, filenames, labels,
+                                pitchers, trials, frames, num_shards):
   """Processes and saves list of images as TFRecord in 1 shard.
 
   Args:
+    name: string of dataset name specifying travaltes
     coder: instance of ImageCoder to provide TensorFlow image coding utils.
     ranges: list of pairs of integers specifying ranges of each shard.
     filenames: list of strings; each string is a path to an image file
     labels: list of integer; each integer identifies the ground truth
     num_shards: integer number of shards for this data set.
   """
-  # 
-  num_files_in_shard = ranges[1] - ranges[thread_index][0]
+  #
+  assert len(filenames) == len(lables)
 
   for s in range(num_shards):
     # Generate a sharded version of the file name, e.g. 'train-00002-of-00010'
@@ -343,6 +347,7 @@ def _find_image_files(data_dir):
 
   intents = []
   labels = []
+  
   filenames = []
 
   # Leave label index 0 empty as a background class.
