@@ -95,9 +95,9 @@ tf.app.flags.DEFINE_string('test_directory', '/tmp/',
 tf.app.flags.DEFINE_string('output_directory', '/tmp/',
                            'Output data directory')
 
-tf.app.flags.DEFINE_integer('train_shards', 1024,
+tf.app.flags.DEFINE_integer('train_shards', 16,
                             'Number of shards in training TFRecord files.')
-tf.app.flags.DEFINE_integer('validation_shards', 128,
+tf.app.flags.DEFINE_integer('validation_shards', 8,
                             'Number of shards in validation TFRecord files.')
 
 tf.app.flags.DEFINE_integer('num_threads', 8,
