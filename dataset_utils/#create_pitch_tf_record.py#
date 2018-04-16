@@ -287,7 +287,7 @@ def _process_dataset(name, directory, num_shards):
     directory: string, root path to the data set.
     num_shards: integer number of shards for this data set.
   """
-  filenames, labels = _find_image_files(FLAGS.paths_file,
+  filenames, labels, pitchers, trials, frames = _find_image_files(FLAGS.paths_file,
                                         FLAGS.labels_file,
                                         FLAGS.pitchers_file,
                                         FLAGS.trials_file,

@@ -1,6 +1,6 @@
 """ 
 Separate the raw dataset to train/valiadate/test. 
-Specifies, filename, label, pitcher, trial, frame for each image file.
+Make notations for each image with filename, label, pitcher, trial, frame for each image file.
 Save lists of above to root of raw data.
 """
 
@@ -46,7 +46,7 @@ def find_pitch_init(joint_path, intent, pitcher, trial):
   initframe = di - window_size
   return dist, initframe 
 
-def find_image_files(data_dir):
+def notate_image_files(data_dir):
   """Build a list of all images files and labels in the data set.
 
   Args:
@@ -180,7 +180,7 @@ def find_image_files(data_dir):
 def main():
     (trainpaths, trainlabels, trainpitchers, traintrials, trainframes,
     validatepaths, validatelabels, validatepitchers, validatetrials,
-    validateframes, testpaths, testlabels, testpitchers, testtrials, testframes) = find_image_files(data_dir)
+    validateframes, testpaths, testlabels, testpitchers, testtrials, testframes) = notate_image_files(data_dir)
     # write data info into text files
     today = datetime.datetime.today().strftime("%Y%m%d")
 

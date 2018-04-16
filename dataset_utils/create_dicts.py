@@ -1,14 +1,3 @@
-from datetime import datetime
-import os
-import glob
-import random
-import sys
-import threading
-
-import numpy as np
-import scipy.io as spio
-import tensorflow as tf
-
 DATA_DIR = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
 # DATA_DIR = '/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk'
 
@@ -67,4 +56,3 @@ for (idx, key) in enumerate(trainpaths_new):
 for (idx, key) in enumerate(testpaths_new):
   if not idx % 45:
     test_dict[key] = testlabels_new[idx]
-
