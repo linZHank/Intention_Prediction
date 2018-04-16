@@ -188,7 +188,7 @@ def _process_image(filename, coder):
     filename: string, path to an image file e.g., '/path/to/example.JPG'.
     coder: instance of ImageCoder to provide TensorFlow image coding utils.
   Returns:
-    image_buffer: string, JPEG encoding of RGB image.
+    image_buffer: string, encoding of RGB image.
     height: integer, image height in pixels.
     width: integer, image width in pixels.
   """
@@ -254,18 +254,21 @@ def _process_image_files_shards(name, coder, ranges, filenames, labels,
     sys.stdout.flush()
 
 
-def _process_image_files(filenames, labels, num_shards):
+def process_annotated_files(name, annotations, num_shards):
   """Process and save list of images as TFRecord of Example protos.
 
   Args:
-    filenames: list of strings; each string is a path to an image file
-    labels: list of integer; each integer identifies the ground truth
+    name: string, unique identifier specifying the data set (train, validate, test).
+    annotations: dictation of annotations; each key is one type of annotations to the image files
     num_shards: integer number of shards for this data set.
   """
-  assert len(filenames) == len(labels)
+  # Examing if annotations have same length
+  keys = annotations.keys()
+  for i in len(keys)-1:
+    assert len(annotations[keys[i]]) == len(annotations[keys[i+1]])
 
-  # Break all images into batches with a [ranges[i][0], ranges[i][1]].
-  spacing = np.linspace(0, len(filenames), num_shards + 1).astype(np.int)
+  # Break all images into batches with [ranges[i][0], ranges[i][1]].
+  spacing = np.linspace(0, len(annotations[keys[0]]), num_shards + 1).astype(np.int)
   ranges = []
   for i in range(len(spacing) - 1):
     ranges.append([spacing[i], spacing[i + 1]])
@@ -274,43 +277,44 @@ def _process_image_files(filenames, labels, num_shards):
   coder = ImageCoder()
 
   # create tfrecord shard by shard
-  _process_image_files_batch(coder, ranges, filenames, labels, num_shards)
+  process_image_files_shards(coder, ranges, annotations, num_shards)
 
   print('{} Finished writing all {} images in data set.'.format(datetime.now(), len(filenames)))
   sys.stdout.flush()
 
-def _process_dataset(name, directory, num_shards):
+def read_annotation_files(name, directory):
+  files_location = os.path.join(directory, 'dataset_config', 'travaltes_20180415', name+'*.txt')
+  info_files = sorted(glob.glob(files_location))
+  annotations = {}
+  keys = []
+  
+  for ifile in info_files:
+    key = ifile.split('/')[-1].split('.')[0]
+    keys.append(key)
+    with open(ifile) as f:
+      annotations[key] = f.read().split('\n')[:-1]
+      
+  return annotations
+
+  
+def process_dataset(name, directory, num_shards):
   """Process a complete data set and save it as a TFRecord.
 
   Args:
-    name: string, unique identifier specifying the data set.
+    name: string, unique identifier specifying the data set (train, validate, test).
     directory: string, root path to the data set.
     num_shards: integer number of shards for this data set.
   """
-  filenames, labels = _find_image_files(FLAGS.paths_file,
-                                        FLAGS.labels_file,
-                                        FLAGS.pitchers_file,
-                                        FLAGS.trials_file,
-                                        FLAGS.frames_file)
-  _process_image_files(name, filenames, labels, num_shards)
+  annotations = read_annotation_files(name, directory)
+  process_annotated_files(annotations, num_shards)
 
 def main(unused_argv):
-  assert not FLAGS.train_shards % FLAGS.num_threads, (
-      'Please make the FLAGS.num_threads commensurate with FLAGS.train_shards')
-  assert not FLAGS.validation_shards % FLAGS.num_threads, (
-      'Please make the FLAGS.num_threads commensurate with '
-      'FLAGS.validation_shards')
-  assert not FLAGS.test_shards % FLAGS.num_threads, (
-      'Please make the FLAGS.num_threads commensurate with '
-      'FLAGS.test_shards')
   print('Saving results to %s' % FLAGS.output_directory)
 
   # Run it!
-  _process_dataset('validation', FLAGS.validation_directory,
-                   FLAGS.validation_shards, synset_to_human, image_to_bboxes)
-  _process_dataset('train', FLAGS.train_directory, FLAGS.train_shards,
-                   synset_to_human, image_to_bboxes)
-  _process_dataset('test', FLAGS.test_directory, FLAGS.test_shards, pitcher_id)
+  process_dataset('validation', FLAGS.validation_directory, FLAGS.validate_shards)
+  process_dataset('train', FLAGS.train_directory, FLAGS.train_shards)
+  process_dataset('test', FLAGS.test_directory, FLAGS.test_shards)
 
 
 if __name__ == '__main__':
