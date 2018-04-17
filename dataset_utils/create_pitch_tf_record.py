@@ -22,10 +22,10 @@ each containing 380 PNG images for a total of 3420 PNG images.
 This TensorFlow script converts the training, evaluation and testing data into
 a sharded data set consisting of 16, 8 and 8 TFRecord files, respectively.
 
-  train_directory/train-00-of-16
-  train_directory/train-01-of-16
+  train_directory/train-00001-of-00016
+  train_directory/train-00002-of-00016
   ...
-  train_directory/train-16-of-16
+  train_directory/train-00016-of-00016
 
 and
 
@@ -65,7 +65,7 @@ Running this script using 8 threads may take around ~? hours
 on an Alienware Aurora R6.
 
 Running this script using 16 threads may take around ~? hours 
-on an Threadripper 1900X + ASRock X399 Taichi.
+on an Threadripper 1900X.
 """
 from __future__ import absolute_import
 from __future__ import division
@@ -76,7 +76,6 @@ import os
 import glob
 import random
 import sys
-import threading
 
 import numpy as np
 import scipy.io as spio
@@ -84,20 +83,16 @@ import six
 import tensorflow as tf
 
 
-DATA_DIR = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
+DATA_DIR_R6 = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/'
 
-tf.app.flags.DEFINE_string('train_directory', '/tmp/',
-                           'Training data directory')
-tf.app.flags.DEFINE_string('validation_directory', '/tmp/',
-                           'Validation data directory')
-tf.app.flags.DEFINE_string('test_directory', '/tmp/',
-                           'Test data directory')
-tf.app.flags.DEFINE_string('output_directory', '/tmp/',
+tf.app.flags.DEFINE_string('data_dir', DATA_DIR_R6,
+                           'data directory')
+tf.app.flags.DEFINE_string('output_directory', DATA_DIR_R6+'tfrecord/',
                            'Output data directory')
 
 tf.app.flags.DEFINE_integer('train_shards', 16,
                             'Number of shards in training TFRecord files.')
-tf.app.flags.DEFINE_integer('validation_shards', 8,
+tf.app.flags.DEFINE_integer('validate_shards', 8,
                             'Number of shards in validation TFRecord files.')
 
 tf.app.flags.DEFINE_integer('num_threads', 8,
@@ -127,8 +122,8 @@ def _bytes_feature(value):
   return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
-def _convert_to_example(filename, image_buffer, label,
-                        pitcher, trial, frame, height, width):
+def convert_to_example(filename, image_buffer, label, height, width,
+                        pitcher, trial, frame):
   """Build an Example proto for an example.
 
   Args:
@@ -148,17 +143,18 @@ def _convert_to_example(filename, image_buffer, label,
   image_format = 'PNG'
 
   example = tf.train.Example(features=tf.train.Features(feature={
-      'image/height': _int64_feature(height),
-      'image/width': _int64_feature(width),
       'image/colorspace': _bytes_feature(colorspace),
       'image/channels': _int64_feature(channels),
-      'image/class/label': _int64_feature(label),
-      'image/class/pitcher': _bytes_feature(pitcher),
-      'image/trial': _bytes_feature(trial),
-      'image/frame': _int64_feature(frame),
       'image/format': _bytes_feature(image_format),
       'image/filename': _bytes_feature(os.path.basename(filename)),
-      'image/encoded': _bytes_feature(image_buffer)}))
+      'image/encoded': _bytes_feature(image_buffer),
+      'image/class/label': _int64_feature(label),
+      'image/height': _int64_feature(height),
+      'image/width': _int64_feature(width),
+      'image/pitcher': _bytes_feature(pitcher),
+      'image/trial': _bytes_feature(trial),
+      'image/frame': _int64_feature(frame)}))
+
   return example
 
 
@@ -181,7 +177,7 @@ class ImageCoder(object):
     return image
 
 
-def _process_image(filename, coder):
+def process_image(filename, coder):
   """Process a single image file.
 
   Args:
@@ -196,7 +192,7 @@ def _process_image(filename, coder):
   with tf.gfile.FastGFile(filename, 'rb') as f:
     image_data = f.read()
 
-  # Decode the RGB JPEG.
+  # Decode the RGB image.
   image = coder.decode_image(image_data)
 
   # Check that image converted to RGB
@@ -208,38 +204,37 @@ def _process_image(filename, coder):
   return image_data, height, width
 
 
-def _process_image_files_shards(name, coder, ranges, filenames, labels,
-                                pitchers, trials, frames, num_shards):
+def process_image_files_shards(name, coder, ranges, annotations, num_shards):
   """Processes and saves list of images as TFRecord in 1 shard.
 
   Args:
     name: string of dataset name specifying travaltes
     coder: instance of ImageCoder to provide TensorFlow image coding utils.
     ranges: list of pairs of integers specifying ranges of each shard.
-    filenames: list of strings; each string is a path to an image file
-    labels: list of integer; each integer identifies the ground truth
+    annotations: dictionary of data; each key stands for 
     num_shards: integer number of shards for this data set.
   """
-  #
-  assert len(filenames) == len(lables)
-
   for s in range(num_shards):
-    # Generate a sharded version of the file name, e.g. 'train-00002-of-00010'
-    output_filename = "{}-{:05d}-of-{:05d}".format(name, shard, num_shards)
+    # Generate a sharded version of the file name, e.g. 'train-0002-of-0016'
+    output_filename = "{}-{:05d}-of-{:05d}".format(name, s+1, num_shards)
     output_file = os.path.join(FLAGS.output_directory, output_filename)
     writer = tf.python_io.TFRecordWriter(output_file)
 
     shard_counter = 0
     indices_in_shard = np.arange(ranges[s][0], ranges[s][1], dtype=int)
-    labels_in_shard = labels[ranges[s][0]:ranges[s][1]]
     counter = 0
+    keys = sorted(annotations.keys())
     for i in indices_in_shard:
-      filename = filenames[i]
-      label = labels[i]
+      filename = annotations[name+'_paths'][i]
+      label = annotations[name+'_labels'][i]
+      pitcher = annotations[name+'_pitchers'][i]
+      trial = annotations[name+'_trials'][i]
+      frame = annotations[name+'_frames'][i]
 
-      image_buffer, height, width = _process_image(filename, coder)
+      image_buffer, height, width = process_image(filename, coder)
 
-      example = _convert_to_example(filename, image_buffer, label, height, width)
+      example = convert_to_example(filename, image_buffer, label, height, width,
+                                    pitcher, trial, frame)
       writer.write(example.SerializeToString())
       counter += 1
 
@@ -259,12 +254,13 @@ def process_annotated_files(name, annotations, num_shards):
 
   Args:
     name: string, unique identifier specifying the data set (train, validate, test).
-    annotations: dictation of annotations; each key is one type of annotations to the image files
+    annotations: dictionary of annotations: 
+      each key is one type of annotations to the image files
     num_shards: integer number of shards for this data set.
   """
   # Examing if annotations have same length
-  keys = annotations.keys()
-  for i in len(keys)-1:
+  keys = sorted(annotations.keys())
+  for i in range(len(keys)-1):
     assert len(annotations[keys[i]]) == len(annotations[keys[i+1]])
 
   # Break all images into batches with [ranges[i][0], ranges[i][1]].
@@ -277,13 +273,15 @@ def process_annotated_files(name, annotations, num_shards):
   coder = ImageCoder()
 
   # create tfrecord shard by shard
-  process_image_files_shards(coder, ranges, annotations, num_shards)
+  process_image_files_shards(name, coder, ranges, annotations, num_shards)
 
-  print('{} Finished writing all {} images in data set.'.format(datetime.now(), len(filenames)))
+  print('{} Finished writing all {} images in data set.'.
+        format(datetime.now(), len(filenames)))
   sys.stdout.flush()
 
 def read_annotation_files(name, directory):
-  files_location = os.path.join(directory, 'dataset_config', 'travaltes_20180415', name+'*.txt')
+  files_location = os.path.join(directory,
+                                'dataset_config', 'travaltes_20180415', name+'*.txt')
   info_files = sorted(glob.glob(files_location))
   annotations = {}
   keys = []
@@ -306,15 +304,15 @@ def process_dataset(name, directory, num_shards):
     num_shards: integer number of shards for this data set.
   """
   annotations = read_annotation_files(name, directory)
-  process_annotated_files(annotations, num_shards)
+  process_annotated_files(name, annotations, num_shards)
 
 def main(unused_argv):
   print('Saving results to %s' % FLAGS.output_directory)
 
   # Run it!
-  process_dataset('validation', FLAGS.validation_directory, FLAGS.validate_shards)
-  process_dataset('train', FLAGS.train_directory, FLAGS.train_shards)
-  process_dataset('test', FLAGS.test_directory, FLAGS.test_shards)
+  process_dataset('train', FLAGS.data_dir, FLAGS.train_shards)
+  process_dataset('validation', FLAGS.data_dir, FLAGS.validate_shards)
+  process_dataset('test', FLAGS.data_dir, FLAGS.test_shards)
 
 
 if __name__ == '__main__':

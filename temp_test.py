@@ -1,70 +1,21 @@
-from datetime import datetime
 import os
 import glob
-import random
-import sys
-import threading
 
-import numpy as np
-import scipy.io as spio
-import tensorflow as tf
-
-DATA_DIR = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
-# DATA_DIR = '/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk'
-
-trainpathsfile = DATA_DIR+'/dataset_config/travaltes_20180415/train_paths.txt'
-validatepathsfile = DATA_DIR+'/dataset_config/travaltes_20180415/validate_paths.txt'
-testpathsfile = DATA_DIR+'/dataset_config/travaltes_20180415/test_paths.txt'
-
-trainlabelsfile = DATA_DIR+'/dataset_config/travaltes_20180415/train_labels.txt'
-validatelabelsfile = DATA_DIR+'/dataset_config/travaltes_20180415/validate_labels.txt'
-testlabelsfile = DATA_DIR+'/dataset_config/travaltes_20180415/test_labels.txt'
-
-trainpaths = []
-validatepaths = []
-testpaths = []
-
-trainlabels = []
-validatelabels = []
-testlabels = []
-
-with open(trainpathsfile, 'r') as f:
-  trainpaths = f.read().split('\n')[:-1]
-
-with open(validatepathsfile, 'r') as f:
-  validatepaths = f.read().split('\n')[:-1]
-
-with open(testpathsfile, 'r') as f:
-  testpaths = f.read().split('\n')[:-1]
-    
-with open(trainlabelsfile, 'r') as f:
-  trainlabels = f.read().split('\n')[:-1]
-  trainlabels = map(int, trainlabels)
-
-with open(validatelabelsfile, 'r') as f:
-  validatelabels = f.read().split('\n')[:-1]
-  validatelabels = map(int, validatelabels)
+def read_annotation_files(name, directory):
+  files_location = os.path.join(directory,
+                                'dataset_config', 'travaltes_20180415', name+'*.txt')
+  info_files = sorted(glob.glob(files_location))
+  annotations = {}
+  keys = []
   
-with open(testlabelsfile, 'r') as f:
-  testlabels = f.read().split('\n')[:-1]
-  testlabels = map(int, testlabels)
-  
-# Re-allocate your train/test partition: 8/2
-train_dict = {}
-test_dict = {}
+  for ifile in info_files:
+    key = ifile.split('/')[-1].split('.')[0]
+    keys.append(key)
+    with open(ifile) as f:
+      annotations[key] = f.read().split('\n')[:-1]
+      
+  return annotations
 
-trainpaths_new = trainpaths + validatepaths
-testpaths_new = testpaths
-
-trainlabels_new = trainlabels + validatelabels
-testlabels_new = testlabels
-
-# Create dicts
-for (idx, key) in enumerate(trainpaths_new):
-  if not idx % 45:
-    train_dict[key] = trainlabels_new[idx]
-
-for (idx, key) in enumerate(testpaths_new):
-  if not idx % 45:
-    test_dict[key] = testlabels_new[idx]
-
+data_dir = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
+name = 'train'
+annotations = read_annotation_files(name, data_dir)
