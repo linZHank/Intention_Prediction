@@ -78,16 +78,17 @@ import random
 import sys
 
 import numpy as np
-import scipy.io as spio
-import six
+import scipy.io as spi
 import tensorflow as tf
 
+import pdb
 
-DATA_DIR_R6 = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/'
+#DATA_DIR = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/'
+DATA_DIR = '/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/'
 
-tf.app.flags.DEFINE_string('data_dir', DATA_DIR_R6,
+tf.app.flags.DEFINE_string('data_dir', DATA_DIR,
                            'data directory')
-tf.app.flags.DEFINE_string('output_directory', DATA_DIR_R6+'tfrecord/',
+tf.app.flags.DEFINE_string('output_directory',  DATA_DIR+'tfrecord/',
                            'Output data directory')
 
 tf.app.flags.DEFINE_integer('train_shards', 16,
@@ -95,30 +96,16 @@ tf.app.flags.DEFINE_integer('train_shards', 16,
 tf.app.flags.DEFINE_integer('validate_shards', 8,
                             'Number of shards in validation TFRecord files.')
 
-tf.app.flags.DEFINE_integer('num_threads', 8,
-                            'Number of threads to preprocess the images.')
+tf.app.flags.DEFINE_integer('test_shards', 8,
+                            'Number of shards test TFRecord files.')
 
 FLAGS = tf.app.flags.FLAGS
 
 
-def _int64_feature(value):
-  """Wrapper for inserting int64 features into Example proto."""
-  if not isinstance(value, list):
-    value = [value]
-  return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
+def int64_feature(value):
+  return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
 
-
-def _float_feature(value):
-  """Wrapper for inserting float features into Example proto."""
-  if not isinstance(value, list):
-    value = [value]
-  return tf.train.Feature(float_list=tf.train.FloatList(value=value))
-
-
-def _bytes_feature(value):
-  """Wrapper for inserting bytes features into Example proto."""
-  if isinstance(value, six.string_types):           
-    value = six.binary_type(value, encoding='utf-8') 
+def bytes_feature(value):
   return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
@@ -143,17 +130,17 @@ def convert_to_example(filename, image_buffer, label, height, width,
   image_format = 'PNG'
 
   example = tf.train.Example(features=tf.train.Features(feature={
-      'image/colorspace': _bytes_feature(colorspace),
-      'image/channels': _int64_feature(channels),
-      'image/format': _bytes_feature(image_format),
-      'image/filename': _bytes_feature(os.path.basename(filename)),
-      'image/encoded': _bytes_feature(image_buffer),
-      'image/class/label': _int64_feature(label),
-      'image/height': _int64_feature(height),
-      'image/width': _int64_feature(width),
-      'image/pitcher': _bytes_feature(pitcher),
-      'image/trial': _bytes_feature(trial),
-      'image/frame': _int64_feature(frame)}))
+      'image/colorspace': bytes_feature(colorspace),
+      'image/channels': int64_feature(channels),
+      'image/format': bytes_feature(image_format),
+      'image/filename': bytes_feature(os.path.basename(filename)),
+      'image/encoded': bytes_feature(image_buffer),
+      'image/class/label': int64_feature(label),
+      'image/height': int64_feature(height),
+      'image/width': int64_feature(width),
+      'image/pitcher': bytes_feature(pitcher),
+      'image/trial': bytes_feature(trial),
+      'image/frame': bytes_feature(frame)}))
 
   return example
 
@@ -214,19 +201,19 @@ def process_image_files_shards(name, coder, ranges, annotations, num_shards):
     annotations: dictionary of data; each key stands for 
     num_shards: integer number of shards for this data set.
   """
+  shard_counter = 0
   for s in range(num_shards):
     # Generate a sharded version of the file name, e.g. 'train-0002-of-0016'
     output_filename = "{}-{:05d}-of-{:05d}".format(name, s+1, num_shards)
     output_file = os.path.join(FLAGS.output_directory, output_filename)
     writer = tf.python_io.TFRecordWriter(output_file)
 
-    shard_counter = 0
     indices_in_shard = np.arange(ranges[s][0], ranges[s][1], dtype=int)
     counter = 0
     keys = sorted(annotations.keys())
     for i in indices_in_shard:
       filename = annotations[name+'_paths'][i]
-      label = annotations[name+'_labels'][i]
+      label = map(int, annotations[name+'_labels'])[i]
       pitcher = annotations[name+'_pitchers'][i]
       trial = annotations[name+'_trials'][i]
       frame = annotations[name+'_frames'][i]
@@ -238,13 +225,13 @@ def process_image_files_shards(name, coder, ranges, annotations, num_shards):
       writer.write(example.SerializeToString())
       counter += 1
 
-      print("{} [ shard-{:d}]: Processed {:d} of {:d} images in shard.".format
-              (datetime.now(), s, counter, len(indices_in_shard)))
+      print("{}: [shard-{:d}]: Processed {:d} of {:d} images in shard.".format
+              (datetime.now(), s+1, counter, len(indices_in_shard)))
       sys.stdout.flush()
 
     writer.close()
     shard_counter += 1
-    print("==== {} [shard-{:d}] wrote to {}".format
+    print("===> {}: [shard-{:d}] wrote to {}".format
           (datetime.now(), shard_counter, output_file))
     sys.stdout.flush()
 
@@ -275,14 +262,16 @@ def process_annotated_files(name, annotations, num_shards):
   # create tfrecord shard by shard
   process_image_files_shards(name, coder, ranges, annotations, num_shards)
 
-  print('{} Finished writing all {} images in data set.'.
-        format(datetime.now(), len(filenames)))
+  print('{}: Finished writing all {} images in {} dataset.'.format(datetime.now(),
+                                                                   len(annotations[keys[0]]),
+                                                                   name+"ing"))
   sys.stdout.flush()
 
 def read_annotation_files(name, directory):
   files_location = os.path.join(directory,
-                                'dataset_config', 'travaltes_20180415', name+'*.txt')
+                                'dataset_config', 'travaltes_20180417', name+'*.txt')
   info_files = sorted(glob.glob(files_location))
+  assert info_files, "No file was loaded!" # check if files are loaded
   annotations = {}
   keys = []
   
@@ -311,7 +300,7 @@ def main(unused_argv):
 
   # Run it!
   process_dataset('train', FLAGS.data_dir, FLAGS.train_shards)
-  process_dataset('validation', FLAGS.data_dir, FLAGS.validate_shards)
+  process_dataset('validate', FLAGS.data_dir, FLAGS.validate_shards)
   process_dataset('test', FLAGS.data_dir, FLAGS.test_shards)
 
 

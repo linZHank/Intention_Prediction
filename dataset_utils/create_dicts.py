@@ -1,5 +1,5 @@
-DATA_DIR = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
-# DATA_DIR = '/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk'
+#DATA_DIR = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
+DATA_DIR = '/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk'
 
 trainpathsfile = DATA_DIR+'/dataset_config/travaltes_20180415/train_paths.txt'
 validatepathsfile = DATA_DIR+'/dataset_config/travaltes_20180415/validate_paths.txt'

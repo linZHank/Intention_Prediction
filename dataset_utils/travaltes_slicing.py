@@ -11,7 +11,8 @@ import glob
 import datetime
 import errno
 
-data_dir = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
+# data_dir = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
+data_dir = '/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/'
 
 def find_pitch_init(joint_path, intent, pitcher, trial):
   """Find the initiating moment of each pitching trial.
