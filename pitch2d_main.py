@@ -1,144 +1,171 @@
+#  Copyright 2016 The TensorFlow Authors. All Rights Reserved.
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+"""Convolutional Neural Network Estimator for pitch2d, built with tf.layers."""
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-# Imports
 import numpy as np
 import tensorflow as tf
 
+tf.logging.set_verbosity(tf.logging.INFO)
 
-def create_model(data_format):
-  """Model to predict pitching intentions in pitch2d dataset.
-  Network structure is equivalent to AlexNet
-  Args:
-    data_format: Either 'channels_first' or 'channels_last'. 'channels_first' is
-      typically faster on GPUs while 'channels_last' is typically faster on
-      CPUs. See
-      https://www.tensorflow.org/performance/performance_guide#data_formats
-  Returns:
-    ?.
-  """
-  if data_format == 'channels_first':
-    input_shape = [3, 224, 224]
-  else:
-    assert data_format == 'channels_last'
-    input_shape = [224, 224, 3]
 
-  l = tf.keras.layers
-  max_pool = l.MaxPooling2D(
-      (2, 2), (2, 2), padding='same', data_format=data_format)
-  # The model consists of a sequential chain of layers, so tf.keras.Sequential
-  # (a subclass of tf.keras.Model) makes for a compact description.
-  return tf.keras.Sequential(
-      [
-          l.Reshape(input_shape),
-          l.Conv2D(
-              32,
-              5,
-              padding='same',
-              data_format=data_format,
-              activation=tf.nn.relu),
-          max_pool,
-          l.Conv2D(
-              64,
-              5,
-              padding='same',
-              data_format=data_format,
-              activation=tf.nn.relu),
-          max_pool,
-          l.Flatten(),
-          l.Dense(1024, activation=tf.nn.relu),
-          l.Dropout(0.4),
-          l.Dense(10)
-      ])
+def alexnet_fn(features, labels, mode):
+  """Model function for CNN."""
+  # Input Layer
+  # Reshape X to 4-D tensor: [batch_size, width, height, channels]
+  # pitch2d images are 224x224 pixels, and have 3 RGB color channel
+  input_layer = tf.reshape(features["x"], [-1, 224, 224, 3])
 
-def model_fn(features, labels, mode, params):
-    """
-    Create an estimator.
-    """
-    model = create_model(params['data_format'])
-    image = features
-    if isinstance(image, dict):
-        image = features['image']
-    
-    if mode == tf.estimator.ModeKeys.PREDICT:
-        logits = model(image, training=False)
-        predictions = {
-            'classes': tf.argmax(logits, axis=1),
-            'probabilities': tf.nn.softmax(logits),
-        }
-        return tf.estimator.EstimatorSpec(
-            mode=tf.estimator.ModeKeys.PREDICT,
-            predictions=predictions,
-            export_outputs={
-                'classify': tf.estimator.export.PredictOutput(predictions)
-            })
+  # Convolutional Layer #1
+  # Computes 96 features using a 11x11x3 filter with step of 4 plus ReLU activation.
+  # Padding is added to preserve width and height.
+  # Input Tensor Shape: [batch_size, 224, 224, 3]
+  # Output Tensor Shape: [batch_size, 55, 55, 96]
+  conv1 = tf.layers.conv2d(
+      inputs=input_layer,
+      filters=96,
+      kernel_size=[11, 11],
+      strides=4,
+      padding="valid",
+      activation=tf.nn.relu
+  )
 
-    if mode == tf.estimator.ModeKeys.TRAIN:
-        optimizer = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE)
+  # Local Response Normalization Layer #1
+  # 
+  lrn1 = tf.nn.local_response_normalization(
+      input=conv1,
+      depth_radius=5,
+      bias=2,
+      alpha=1e-4,
+      beta=0.75
+  )
 
-    # If we are running multi-GPU, we need to wrap the optimizer.
-    if params.get('multi_gpu'):
-        optimizer = tf.contrib.estimator.TowerOptimizer(optimizer)
+  # Pooling Layer #1
+  # First max pooling layer with a 3x3 filter and stride of 2
+  # Input Tensor Shape: [batch_size, 55, 55, 96]
+  # Output Tensor Shape: [batch_size, 14, 14, 32]
+  pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
 
-        logits = model(image, training=True)
-        loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
-        accuracy = tf.metrics.accuracy(
-            labels=labels, predictions=tf.argmax(logits, axis=1))
+  # Convolutional Layer #2
+  # Computes 64 features using a 5x5 filter.
+  # Padding is added to preserve width and height.
+  # Input Tensor Shape: [batch_size, 14, 14, 32]
+  # Output Tensor Shape: [batch_size, 14, 14, 64]
+  conv2 = tf.layers.conv2d(
+      inputs=pool1,
+      filters=64,
+      kernel_size=[5, 5],
+      padding="same",
+      activation=tf.nn.relu)
 
-        # Name tensors to be logged with LoggingTensorHook.
-        tf.identity(LEARNING_RATE, 'learning_rate')
-        tf.identity(loss, 'cross_entropy')
-        tf.identity(accuracy[1], name='train_accuracy')
+  # Pooling Layer #2
+  # Second max pooling layer with a 2x2 filter and stride of 2
+  # Input Tensor Shape: [batch_size, 14, 14, 64]
+  # Output Tensor Shape: [batch_size, 7, 7, 64]
+  pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
 
-        # Save accuracy scalar to Tensorboard output.
-        tf.summary.scalar('train_accuracy', accuracy[1])
+  # Flatten tensor into a batch of vectors
+  # Input Tensor Shape: [batch_size, 7, 7, 64]
+  # Output Tensor Shape: [batch_size, 7 * 7 * 64]
+  pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 64])
 
-        return tf.estimator.EstimatorSpec(
-            mode=tf.estimator.ModeKeys.TRAIN,
-            loss=loss,
-            train_op=optimizer.minimize(loss, tf.train.get_or_create_global_step()))
+  # Dense Layer
+  # Densely connected layer with 1024 neurons
+  # Input Tensor Shape: [batch_size, 7 * 7 * 64]
+  # Output Tensor Shape: [batch_size, 1024]
+  dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
 
-    if mode == tf.estimator.ModeKeys.EVAL:
-        logits = model(image, training=False)
-        loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
-        return tf.estimator.EstimatorSpec(
-            mode=tf.estimator.ModeKeys.EVAL,
-            loss=loss,
-            eval_metric_ops={
-                'accuracy':
-                tf.metrics.accuracy(
-                    labels=labels, predictions=tf.argmax(logits, axis=1)),
-            })
-    
+  # Add dropout operation; 0.6 probability that element will be kept
+  dropout = tf.layers.dropout(
+      inputs=dense, rate=0.4, training=mode == tf.estimator.ModeKeys.TRAIN)
 
-def main(argv):
-    parser = pitch2dArgParser()
-    flags = parser.parse_args(args=argv[1:])
+  # Logits layer
+  # Input Tensor Shape: [batch_size, 1024]
+  # Output Tensor Shape: [batch_size, 10]
+  logits = tf.layers.dense(inputs=dropout, units=10)
 
-    model_function = model_fn
+  predictions = {
+      # Generate predictions (for PREDICT and EVAL mode)
+      "classes": tf.argmax(input=logits, axis=1),
+      # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
+      # `logging_hook`.
+      "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
+  }
+  if mode == tf.estimator.ModeKeys.PREDICT:
+    return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
 
-    if flags.multi_gpu:
-        validate_batch_size_for_multi_gpu(flags.batch_size)
+  # Calculate Loss (for both TRAIN and EVAL modes)
+  loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
 
-    # There are two steps required if using multi-GPU: (1) wrap the model_fn,
-    # and (2) wrap the optimizer. The first happens here, and (2) happens
-    # in the model_fn itself when the optimizer is defined.
-    model_function = tf.contrib.estimator.replicate_model_fn(
-        model_fn, loss_reduction=tf.losses.Reduction.MEAN)
+  # Configure the Training Op (for TRAIN mode)
+  if mode == tf.estimator.ModeKeys.TRAIN:
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+    train_op = optimizer.minimize(
+        loss=loss,
+        global_step=tf.train.get_global_step())
+    return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
 
-    data_format = flags.data_format
-    if data_format is None:
-        data_format = ('channels_first'
-                       if tf.test.is_built_with_cuda() else 'channels_last')
-        pitch2d_predictor = tf.estimator.Estimator(
-            model_fn=model_function,
-            model_dir=flags.model_dir,
-            params={
-                'data_format': data_format,
-                'multi_gpu': flags.multi_gpu
-            })
-  
+  # Add evaluation metrics (for EVAL mode)
+  eval_metric_ops = {
+      "accuracy": tf.metrics.accuracy(
+          labels=labels, predictions=predictions["classes"])}
+  return tf.estimator.EstimatorSpec(
+      mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
+
+
+def main(unused_argv):
+  # Load training and eval data
+  train_record = tf.datasets.TFRecordDataset(tfrfilenames)
+  train_data = mnist.train.images  # Returns np.array
+  train_labels = np.asarray(mnist.train.labels, dtype=np.int32)
+  eval_data = mnist.test.images  # Returns np.array
+  eval_labels = np.asarray(mnist.test.labels, dtype=np.int32)
+
+  # Create the Estimator
+  pitch2d_predictor = tf.estimator.Estimator(
+      model_fn=alexnet_fn, model_dir="/tmp/pitch2d_model")
+
+  # Set up logging for predictions
+  # Log the values in the "Softmax" tensor with label "probabilities"
+  tensors_to_log = {"probabilities": "softmax_tensor"}
+  logging_hook = tf.train.LoggingTensorHook(
+      tensors=tensors_to_log, every_n_iter=50)
+
+  # Train the model
+  train_input_fn = tf.estimator.inputs.numpy_input_fn(
+      x={"x": train_data},
+      y=train_labels,
+      batch_size=128,
+      num_epochs=None,
+      shuffle=True)
+  pitch2d_predictor.train(
+      input_fn=train_input_fn,
+      steps=20000,
+      hooks=[logging_hook])
+
+  # Evaluate the model and print results
+  eval_input_fn = tf.estimator.inputs.numpy_input_fn(
+      x={"x": eval_data},
+      y=eval_labels,
+      num_epochs=1,
+      shuffle=False)
+  eval_results = pitch2d_predictor.evaluate(input_fn=eval_input_fn)
+  print(eval_results)
+
+
 if __name__ == "__main__":
-    tf.logging.set_verbosity(tf.logging.INFO)
-    main(argv=sys.argv)
+  tf.app.run()
