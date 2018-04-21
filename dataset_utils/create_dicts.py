@@ -1,13 +1,13 @@
 #DATA_DIR = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
 DATA_DIR = '/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk'
 
-trainpathsfile = DATA_DIR+'/dataset_config/travaltes_20180415/train_paths.txt'
-validatepathsfile = DATA_DIR+'/dataset_config/travaltes_20180415/validate_paths.txt'
-testpathsfile = DATA_DIR+'/dataset_config/travaltes_20180415/test_paths.txt'
+trainpathsfile = DATA_DIR+'/dataset_config/travaltes_20180420/train_paths.txt'
+validatepathsfile = DATA_DIR+'/dataset_config/travaltes_20180420/validate_paths.txt'
+testpathsfile = DATA_DIR+'/dataset_config/travaltes_20180420/test_paths.txt'
 
-trainlabelsfile = DATA_DIR+'/dataset_config/travaltes_20180415/train_labels.txt'
-validatelabelsfile = DATA_DIR+'/dataset_config/travaltes_20180415/validate_labels.txt'
-testlabelsfile = DATA_DIR+'/dataset_config/travaltes_20180415/test_labels.txt'
+trainlabelsfile = DATA_DIR+'/dataset_config/travaltes_20180420/train_labels.txt'
+validatelabelsfile = DATA_DIR+'/dataset_config/travaltes_20180420/validate_labels.txt'
+testlabelsfile = DATA_DIR+'/dataset_config/travaltes_20180420/test_labels.txt'
 
 trainpaths = []
 validatepaths = []

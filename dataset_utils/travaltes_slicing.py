@@ -38,13 +38,15 @@ def find_pitch_init(joint_path, intent, pitcher, trial):
     dist.append(d)
   inc_inarow = 0
   di = 0 # index of distance
-  while di < len(dist)-45 and inc_inarow <= window_size:
-    if dist[di+1] > dist[di]:
+  while di < len(dist)-1 and inc_inarow <= window_size:
+    if dist[di+1] > dist[di] and dist[di] > 0.16:
       inc_inarow += 1
     else:
       inc_inarow = 0
     di += 1
   initframe = di - window_size
+  if initframe > 45: # make sure at least 45 frames are included
+    initframe = 45
   return dist, initframe 
 
 def notate_image_files(data_dir):
