@@ -19,11 +19,14 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
+import os
+import glob
+
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
 
-def alexnet_fn(features, labels, mode):
+def model_fn(features, labels, mode):
   """Model function for CNN."""
   # Input Layer
   # Reshape X to 4-D tensor: [batch_size, width, height, channels]
@@ -198,16 +201,16 @@ def alexnet_fn(features, labels, mode):
 
 
 def main(unused_argv):
-  # Load training and eval data
-  train_record = tf.datasets.TFRecordDataset(tfrfilenames)
-  train_data = mnist.train.images  # Returns np.array
-  train_labels = np.asarray(mnist.train.labels, dtype=np.int32)
-  eval_data = mnist.test.images  # Returns np.array
-  eval_labels = np.asarray(mnist.test.labels, dtype=np.int32)
+  # Create training and evaluating dataset from tfrecord
+  records_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/tfrecord_20180418"
+  traintfrnames = glob.glob(os.path.join(records_dir, 'train*'))
+  train_data = tf.datasets.TFRecordDataset(traintfrnames)
+  evaltfrnames = glob.glob(os.path.join(records_dir, 'validate*'))
+  eval_data = tf.datasets.TFRecordDataset(evaltfrnames)
 
   # Create the Estimator
   pitch2d_predictor = tf.estimator.Estimator(
-      model_fn=alexnet_fn, model_dir="/tmp/pitch2d_model")
+      model_fn=model_fn, model_dir="/tmp/pitch2d_model")
 
   # Set up logging for predictions
   # Log the values in the "Softmax" tensor with label "probabilities"
