@@ -24,7 +24,8 @@ import glob
 
 
 tf.logging.set_verbosity(tf.logging.INFO)
-
+def train_input_fn():
+  
 
 def model_fn(features, labels, mode):
   """Model function for CNN."""
@@ -202,10 +203,11 @@ def model_fn(features, labels, mode):
 
 def main(unused_argv):
   # Create training and evaluating dataset from tfrecord
-  records_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/tfrecord_20180418"
-  traintfrnames = glob.glob(os.path.join(records_dir, 'train*'))
+  # tfrecords_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/tfrecord_20180418"
+  tfrecords_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/tfrecord_20180423"  
+  traintfrnames = glob.glob(os.path.join(tfrecords_dir, 'train*'))
   train_data = tf.datasets.TFRecordDataset(traintfrnames)
-  evaltfrnames = glob.glob(os.path.join(records_dir, 'validate*'))
+  evaltfrnames = glob.glob(os.path.join(tfrecords_dir, 'validate*'))
   eval_data = tf.datasets.TFRecordDataset(evaltfrnames)
 
   # Create the Estimator
@@ -219,12 +221,6 @@ def main(unused_argv):
       tensors=tensors_to_log, every_n_iter=50)
 
   # Train the model
-  train_input_fn = tf.estimator.inputs.numpy_input_fn(
-      x={"x": train_data},
-      y=train_labels,
-      batch_size=128,
-      num_epochs=None,
-      shuffle=True)
   pitch2d_predictor.train(
       input_fn=train_input_fn,
       steps=20000,

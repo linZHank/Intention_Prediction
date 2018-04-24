@@ -63,7 +63,7 @@ The Example proto contains the following fields:
 
 Running this script may take around 863 seconds on an Alienware Aurora R6.
 
-Running this script may take around ? seconds on an Threadripper 1900X.
+Running this script may take around 445 seconds on an Threadripper 1900X.
 """
 from __future__ import absolute_import
 from __future__ import division
@@ -82,8 +82,8 @@ import tensorflow as tf
 
 import pdb
 
-DATA_DIR = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
-# DATA_DIR = '/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk'
+# DATA_DIR = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
+DATA_DIR = '/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk'
 TODAY = datetime.today().strftime("%Y%m%d")
 
 tf.app.flags.DEFINE_string('data_dir', DATA_DIR, 'The original dataset lies here')
@@ -204,7 +204,7 @@ def process_image_files_shards(name, coder, ranges, annotations, num_shards):
   shard_counter = 0
   for s in range(num_shards):
     # Generate a sharded version of the file name, e.g. 'train-0002-of-0016'
-    output_filename = "{}-{:05d}-of-{:05d}".format(name, s+1, num_shards)
+    output_filename = "{}-{:05d}-of-{:05d}.tfrecord".format(name, s+1, num_shards)
     output_file = os.path.join(FLAGS.output_directory, output_filename)
     if not os.path.exists(FLAGS.output_directory):
       try:
