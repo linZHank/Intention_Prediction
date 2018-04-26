@@ -20,42 +20,54 @@ dataset = tf.data.TFRecordDataset(filenames)
 
 def parse_function(example_proto):
     # example_proto, tf_serialized
-    features = {'colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
-                'channels': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=3), 
-                'format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="PNG"), 
-                'filename': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
-                'image': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
-                'class/label': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=1),
-                'height': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=360),
-                'width': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=640),
-                'pitcher': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
-                'trial': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
-                'frame': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="")}
+    features = {'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
+                'image/channels': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=3), 
+                'image/format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="PNG"), 
+                'image/filename': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+                'image/encoded': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+                'image/class/label': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=1),
+                'image/height': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=360),
+                'image/width': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=640),
+                'image/pitcher': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+                'image/trial': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+                'image/frame': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="")}
+    
     # parse all features in a single example according to the dics
     parsed_features = tf.parse_single_example(example_proto, features)
     # decode string
-    parsed_features['image'] = tf.decode_raw(parsed_features['image'], tf.uint8)
+    decoded = tf.image.decode_image((parsed_features['image/encoded']))
     # reshape image
-    parsed_features['image'] = tf.reshape(parsed_features['image'], (224, 224, 3))
-    return parsed_features
+    reshaped = tf.reshape(decoded, [360, 640, 3])
+    # resize image
+    resized = tf.cast(tf.image.resize_images(reshaped, [224, 224]), tf.uint8)
+    # parsed_features['resized'] = tf.image.resize_images(parsed_features['decoded'], [224, 224, 3])
+    label = tf.cast(parsed_features['image/class/label'], tf.int32)
+    return {"image_bytes": parsed_features['image/encoded'],
+            "image_decoded": decoded,
+            "image_reshaped": reshaped,
+            "image_resized": resized}, label
 
-new_dataset = dataset.map(parse_function)
-iterator = new_dataset.make_one_shot_iterator()
-next_element = iterator.get_next()
+dataset = dataset.map(parse_function)
+dataset = dataset.batch(32)
+iterator = dataset.make_one_shot_iterator()
+features, labels = iterator.get_next()
 
 sess = tf.InteractiveSession()
 
 i = 1
-while True:
+while i < 4:
     # 
     try:
-        image = sess.run([next_element['image']])
+        image_reshaped = sess.run(features['image_reshaped'])
+        image_resized = sess.run(features['image_resized'])
+        
     except tf.errors.OutOfRangeError:
         print("End of dataset")
         break
     else:
         print('==============example %s ==============' %i)
-        print('tensor shape: %s | type: %s' %(image.shape, image.dtype))
+        print('image shape: %s | type: %s' %(image_reshaped.shape, image_reshaped.dtype))
+        print('image shape: %s | type: %s' %(image_resized.shape, image_resized.dtype))
     i+=1
-plt.imshow(image)
+plt.imshow(image_resized[0])
 plt.show()

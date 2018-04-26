@@ -23,37 +23,109 @@ from tfrecord_utils import TFRecorder
 import os
 import glob
 
-def parse_function(example_proto):
+
+# tfrecords_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/tfrecord_20180418"
+tfrecords_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/tfrecord_20180423"  
+train_filenames = glob.glob(os.path.join(tfrecords_dir, 'train*'))
+eval_filenames = glob.glob(os.path.join(tfrecords_dir, 'validate*'))
+
+def train_input_fn():
+  dataset = tf.data.TFRecordDataset(train_filenames)
+  def parse_function(example_proto):
     # example_proto, tf_serialized
-    example = {'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
-               'image/channels': tf.FixedLenFeature(shape=(), dtype=tf.int64),            
-               'image/format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
-               'matrix_shape': tf.FixedLenFeature(shape=(2,), dtype=tf.int64), 
-               # tensor was written by toString() method, shape is ()
-               # we first set the type as tf.string, then change to its original type: tf.uint8
-               'tensor': tf.FixedLenFeature(shape=(), dtype=tf.string), 
-               'tensor_shape': tf.FixedLenFeature(shape=(3,), dtype=tf.int64)}
+    features = {'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
+                'image/channels': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=3), 
+                'image/format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="PNG"), 
+                'image/filename': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+                'image/encoded': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+                'image/class/label': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=1),
+                'image/height': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=360),
+                'image/width': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=640),
+                'image/pitcher': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+                'image/trial': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+                'image/frame': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="")}
+    
     # parse all features in a single example according to the dics
-    parsed_example = tf.parse_single_example(example_proto, dics)
-    # decode string
-    parsed_example['tensor'] = tf.decode_raw(parsed_example['tensor'], tf.uint8)
-    # sparse_tensor_to_dense
-    parsed_example['matrix'] = tf.sparse_tensor_to_dense(parsed_example['matrix'])
+    parsed_features = tf.parse_single_example(example_proto, features)
+    # decode the encoded image to the (360, 640, 3) uint8 array
+    decoded_image = tf.image.decode_image((parsed_features['image/encoded']))
+    # reshape image
+    reshaped_image = tf.reshape(decoded_image, [360, 640, 3])
+    # resize decoded image
+    resized_image = tf.image.resize_images(reshaped_image, [224, 224], tf.uint8)
+    # label
+    label = tf.cast(parsed_features['image/class/label'], tf.int32)
+
+    return {"image_bytes": parsed_features['image/encoded'],
+            "image_decoded": decoded_image,
+            "image_reshaped": reshaped_image,
+            "image_resized": resized_image}, label
+
+  # Use `Dataset.map()` to build a pair of a feature dictionary and a label
+  # tensor for each example.
+  dataset = dataset.map(parse_function)
+  dataset = dataset.shuffle(buffer_size=10000)
+  dataset = dataset.batch(16)
+  dataset = dataset.repeat(10)
+  iterator = dataset.make_one_shot_iterator()
+
+  # `features` is a dictionary in which each value is a batch of values for
+  # that feature; `labels` is a batch of labels.
+  features, labels = iterator.get_next()
+  return features, labels
+
+def eval_input_fn():
+  dataset = tf.data.TFRecordDataset(eval_filenames)
+  def parse_function(example_proto):
+    # example_proto, tf_serialized
+    features = {'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
+                'image/channels': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=3), 
+                'image/format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="PNG"), 
+                'image/filename': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+                'image/encoded': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+                'image/class/label': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=1),
+                'image/height': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=360),
+                'image/width': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=640),
+                'image/pitcher': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+                'image/trial': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+                'image/frame': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="")}
     
-    # reshape matrix
-    parsed_example['matrix'] = tf.reshape(parsed_example['matrix'], parsed_example['matrix_shape'])
-    
-    # reshape tensor
-    parsed_example['tensor'] = tf.reshape(parsed_example['tensor'], parsed_example['tensor_shape'])
-    return parsed_example
+    # parse all features in a single example according to the dics
+    parsed_features = tf.parse_single_example(example_proto, features)
+    # decode the encoded image to the (360, 640, 3) uint8 array
+    decoded_image = tf.image.decode_image((parsed_features['image/encoded']))
+    # reshape image
+    reshaped_image = tf.reshape(decoded_image, [360, 640, 3])
+    # resize decoded image
+    resized_image = tf.image.resize_images(reshaped_image, [224, 224], tf.uint8)
+    # label
+    label = tf.cast(parsed_features['image/class/label'], tf.int32)
+
+    return {"image_bytes": parsed_features['image/encoded'],
+            "image_decoded": decoded_image,
+            "image_reshaped": reshaped_image,
+            "image_resized": resized_image}, label
+
+  # Use `Dataset.map()` to build a pair of a feature dictionary and a label
+  # tensor for each example.
+  dataset = dataset.map(parse_function)
+  dataset = dataset.batch(16)
+  dataset = dataset.repeat(10)
+  iterator = dataset.make_one_shot_iterator()
+
+  # `features` is a dictionary in which each value is a batch of values for
+  # that feature; `labels` is a batch of labels.
+  features, labels = iterator.get_next()
+  return features, labels
+
 
 def model_fn(features, labels, mode):
   """Model function for CNN."""
   # Input Layer
   # Reshape X to 4-D tensor: [batch_size, width, height, channels]
   # pitch2d images are 224x224 pixels, and have 3 RGB color channel
-  input_layer = tf.reshape(features["x"], [-1, 224, 224, 3])
-
+  input_layer = features["image_resized"]
+  
   # Convolutional Layer #1
   # Computes 96 features using a 11x11x3 filter with step of 4 plus ReLU activation.
   # Padding is added to preserve width and height.
@@ -163,9 +235,9 @@ def model_fn(features, labels, mode):
     strides=2)
 
   # Flatten tensor into a batch of vectors
-  # Input Tensor Shape: [batch_size, 5, 5, 256]
-  # Output Tensor Shape: [batch_size, 5 * 5 * 256]
-  pool5_flat = tf.reshape(pool5, [-1, 5 * 5 * 256])
+  # Input Tensor Shape: [batch_size, 6, 6, 256]
+  # Output Tensor Shape: [batch_size, 6 * 6 * 256]
+  pool5_flat = tf.reshape(pool5, [-1, 6 * 6 * 256])
 
   # Dense Layer #1
   # Densely connected layer with 4096 neurons
@@ -190,7 +262,7 @@ def model_fn(features, labels, mode):
   # Logits layer
   # Input Tensor Shape: [batch_size, 1024]
   # Output Tensor Shape: [batch_size, 10]
-  logits = tf.layers.dense(inputs=dropou2, units=9)
+  logits = tf.layers.dense(inputs=dropout2, units=9)
 
   predictions = {
       # Generate predictions (for PREDICT and EVAL mode)
@@ -207,7 +279,7 @@ def model_fn(features, labels, mode):
 
   # Configure the Training Op (for TRAIN mode)
   if mode == tf.estimator.ModeKeys.TRAIN:
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=1e-4)
     train_op = optimizer.minimize(
         loss=loss,
         global_step=tf.train.get_global_step())
@@ -222,22 +294,20 @@ def model_fn(features, labels, mode):
 
 
 def main(unused_argv):
-  # Create training and evaluating dataset from tfrecord
-  # tfrecords_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/tfrecord_20180418"
-  tfrecords_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/tfrecord_20180423"  
-  traintfrnames = glob.glob(os.path.join(tfrecords_dir, 'train*'))
-  train_data = tf.datasets.TFRecordDataset(traintfrnames)
-  evaltfrnames = glob.glob(os.path.join(tfrecords_dir, 'validate*'))
-  eval_data = tf.datasets.TFRecordDataset(evaltfrnames)
+  # create input_fn for training
+  # train_data = train_data.map(parse_function)
+  # train_data = train_data.shuffle(buffer_size=10000)
+  # train_data = train_data.batch(32)
+  # train_data = train_data.repeat(10)
+  # train_iterator = train_data.make_one_shot_iterator()
+  # train_input_fn = train_iterator.get_next()
 
-  example_proto = {}
-  def _parse_function(example_proto):
-    features = {"image": tf.FixedLenFeature((), tf.string, default_value=""),
-                "label": tf.FixedLenFeature((), tf.int32, default_value=0)}
-    parsed_features = tf.parse_single_example(example_proto, features)
-    return parsed_features["image"], parsed_features["label"]
-
-  train_data = train_data.map(parse_function)
+  # # create input_fn for evaluation
+  # eval_data = eval_data.map(parse_function)
+  # eval_data = eval_data.batch(32)
+  # eval_data = eval_data.repeat(1)
+  # eval_iterator = eval_data.make_one_shot_iterator()
+  # eval_input_fn = eval_iterator.get_next()
 
   # Create the Estimator
   pitch2d_predictor = tf.estimator.Estimator(
@@ -250,7 +320,7 @@ def main(unused_argv):
       tensors=tensors_to_log, every_n_iter=50)
 
   # Train the model
-  pitch2d_predictor.train()
+  pitch2d_predictor.train(input_fn=train_input_fn, steps = 1000, hooks=[logging_hook])
 
   # Evaluate the model and print results
   eval_results = pitch2d_predictor.evaluate(input_fn=eval_input_fn)
