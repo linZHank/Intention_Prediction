@@ -19,13 +19,33 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
+from tfrecord_utils import TFRecorder
 import os
 import glob
 
-
-tf.logging.set_verbosity(tf.logging.INFO)
-def train_input_fn():
-  
+def parse_function(example_proto):
+    # example_proto, tf_serialized
+    example = {'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+               'image/channels': tf.FixedLenFeature(shape=(), dtype=tf.int64),            
+               'image/format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+               'matrix_shape': tf.FixedLenFeature(shape=(2,), dtype=tf.int64), 
+               # tensor was written by toString() method, shape is ()
+               # we first set the type as tf.string, then change to its original type: tf.uint8
+               'tensor': tf.FixedLenFeature(shape=(), dtype=tf.string), 
+               'tensor_shape': tf.FixedLenFeature(shape=(3,), dtype=tf.int64)}
+    # parse all features in a single example according to the dics
+    parsed_example = tf.parse_single_example(example_proto, dics)
+    # decode string
+    parsed_example['tensor'] = tf.decode_raw(parsed_example['tensor'], tf.uint8)
+    # sparse_tensor_to_dense
+    parsed_example['matrix'] = tf.sparse_tensor_to_dense(parsed_example['matrix'])
+    
+    # reshape matrix
+    parsed_example['matrix'] = tf.reshape(parsed_example['matrix'], parsed_example['matrix_shape'])
+    
+    # reshape tensor
+    parsed_example['tensor'] = tf.reshape(parsed_example['tensor'], parsed_example['tensor_shape'])
+    return parsed_example
 
 def model_fn(features, labels, mode):
   """Model function for CNN."""
@@ -210,6 +230,15 @@ def main(unused_argv):
   evaltfrnames = glob.glob(os.path.join(tfrecords_dir, 'validate*'))
   eval_data = tf.datasets.TFRecordDataset(evaltfrnames)
 
+  example_proto = {}
+  def _parse_function(example_proto):
+    features = {"image": tf.FixedLenFeature((), tf.string, default_value=""),
+                "label": tf.FixedLenFeature((), tf.int32, default_value=0)}
+    parsed_features = tf.parse_single_example(example_proto, features)
+    return parsed_features["image"], parsed_features["label"]
+
+  train_data = train_data.map(parse_function)
+
   # Create the Estimator
   pitch2d_predictor = tf.estimator.Estimator(
       model_fn=model_fn, model_dir="/tmp/pitch2d_model")
@@ -221,20 +250,13 @@ def main(unused_argv):
       tensors=tensors_to_log, every_n_iter=50)
 
   # Train the model
-  pitch2d_predictor.train(
-      input_fn=train_input_fn,
-      steps=20000,
-      hooks=[logging_hook])
+  pitch2d_predictor.train()
 
   # Evaluate the model and print results
-  eval_input_fn = tf.estimator.inputs.numpy_input_fn(
-      x={"x": eval_data},
-      y=eval_labels,
-      num_epochs=1,
-      shuffle=False)
   eval_results = pitch2d_predictor.evaluate(input_fn=eval_input_fn)
   print(eval_results)
 
 
 if __name__ == "__main__":
+  tf.logging.set_verbosity(tf.logging.INFO)
   tf.app.run()

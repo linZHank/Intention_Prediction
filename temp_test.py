@@ -1,21 +1,40 @@
-import os
-import glob
+import tensorflow as tf
+# for displaying image
+from matplotlib import pyplot as plt
+import matplotlib.image as mpimg
+# for data operation
+import pandas as pd
+import numpy as np
 
-def read_annotation_files(name, directory):
-  files_location = os.path.join(directory,
-                                'dataset_config', 'travaltes_20180415', name+'*.txt')
-  info_files = sorted(glob.glob(files_location))
-  annotations = {}
-  keys = []
-  
-  for ifile in info_files:
-    key = ifile.split('/')[-1].split('.')[0]
-    keys.append(key)
-    with open(ifile) as f:
-      annotations[key] = f.read().split('\n')[:-1]
-      
-  return annotations
+np.set_printoptions(precision=3)
+# display function
+def display(alist, show = True):
+    print('type:%s\nshape: %s' %(alist[0].dtype,alist[0].shape))
+    if show:
+        for i in range(3):
+            print('example%s\n%s' %(i,alist[i]))
 
-data_dir = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
-name = 'train'
-annotations = read_annotation_files(name, data_dir)
+scalars = np.array([1,2,3],dtype=np.int32)
+print('\nscalar')
+display(scalars)
+
+vectors = np.array([[0.1,0.1,0.1],
+                   [0.2,0.2,0.2],
+                   [0.3,0.3,0.3]],dtype=np.float32)
+print('\nvector')
+display(vectors)
+
+matrices = np.array([np.array((vectors[0],vectors[0])),
+                    np.array((vectors[1],vectors[1])),
+                    np.array((vectors[2],vectors[2]))],dtype=np.float32)
+print('\nmatrix')
+display(matrices)
+
+# shape of image:(806,806,3)
+img=mpimg.imread('/home/linzhank/playground/toy_imgs/Hank_study.jpeg') 
+tensors = np.array([img,img,img])
+# show image
+print('\n3D-tensor')
+display(tensors, show = False)
+plt.imshow(img)
+
