@@ -19,7 +19,6 @@ from __future__ import print_function
 
 import numpy as np
 import tensorflow as tf
-from tfrecord_utils import TFRecorder
 import os
 import glob
 
@@ -52,7 +51,7 @@ def train_input_fn():
     # reshape image
     reshaped_image = tf.reshape(decoded_image, [360, 640, 3])
     # resize decoded image
-    resized_image = tf.image.resize_images(reshaped_image, [224, 224], tf.uint8)
+    resized_image = tf.image.resize_images(reshaped_image, [224, 224])
     # label
     label = tf.cast(parsed_features['image/class/label'], tf.int32)
 
@@ -65,8 +64,8 @@ def train_input_fn():
   # tensor for each example.
   dataset = dataset.map(parse_function)
   dataset = dataset.shuffle(buffer_size=10000)
-  dataset = dataset.batch(16)
-  dataset = dataset.repeat(10)
+  dataset = dataset.batch(128)
+  dataset = dataset.repeat(128)
   iterator = dataset.make_one_shot_iterator()
 
   # `features` is a dictionary in which each value is a batch of values for
@@ -97,7 +96,7 @@ def eval_input_fn():
     # reshape image
     reshaped_image = tf.reshape(decoded_image, [360, 640, 3])
     # resize decoded image
-    resized_image = tf.image.resize_images(reshaped_image, [224, 224], tf.uint8)
+    resized_image = tf.image.resize_images(reshaped_image, [224, 224])
     # label
     label = tf.cast(parsed_features['image/class/label'], tf.int32)
 
@@ -109,8 +108,7 @@ def eval_input_fn():
   # Use `Dataset.map()` to build a pair of a feature dictionary and a label
   # tensor for each example.
   dataset = dataset.map(parse_function)
-  dataset = dataset.batch(16)
-  dataset = dataset.repeat(10)
+  dataset = dataset.batch(1)
   iterator = dataset.make_one_shot_iterator()
 
   # `features` is a dictionary in which each value is a batch of values for
@@ -279,7 +277,7 @@ def model_fn(features, labels, mode):
 
   # Configure the Training Op (for TRAIN mode)
   if mode == tf.estimator.ModeKeys.TRAIN:
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=1e-4)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=1e-3)
     train_op = optimizer.minimize(
         loss=loss,
         global_step=tf.train.get_global_step())
@@ -320,7 +318,9 @@ def main(unused_argv):
       tensors=tensors_to_log, every_n_iter=50)
 
   # Train the model
-  pitch2d_predictor.train(input_fn=train_input_fn, steps = 1000, hooks=[logging_hook])
+  pitch2d_predictor.train(input_fn=train_input_fn,
+                          steps=128,
+                          hooks=[logging_hook]) # used to have a "step" argument
 
   # Evaluate the model and print results
   eval_results = pitch2d_predictor.evaluate(input_fn=eval_input_fn)
