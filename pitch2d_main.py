@@ -23,8 +23,8 @@ import os
 import glob
 
 
-# tfrecords_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/tfrecord_20180418"
-tfrecords_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/tfrecord_20180423"  
+tfrecords_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/tfrecord_20180418"
+# tfrecords_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/tfrecord_20180423"  
 train_filenames = glob.glob(os.path.join(tfrecords_dir, 'train*'))
 eval_filenames = glob.glob(os.path.join(tfrecords_dir, 'validate*'))
 
@@ -51,7 +51,7 @@ def train_input_fn():
     # reshape image
     reshaped_image = tf.reshape(decoded_image, [360, 640, 3])
     # resize decoded image
-    resized_image = tf.image.resize_images(reshaped_image, [224, 224])
+    resized_image = tf.cast(tf.image.resize_images(reshaped_image, [224, 224]), tf.float32)
     # label
     label = tf.cast(parsed_features['image/class/label'], tf.int32)
 
@@ -63,7 +63,7 @@ def train_input_fn():
   # Use `Dataset.map()` to build a pair of a feature dictionary and a label
   # tensor for each example.
   dataset = dataset.map(parse_function)
-  dataset = dataset.shuffle(buffer_size=10000)
+  dataset = dataset.shuffle(buffer_size=1024)
   dataset = dataset.batch(128)
   dataset = dataset.repeat(128)
   iterator = dataset.make_one_shot_iterator()
@@ -96,7 +96,7 @@ def eval_input_fn():
     # reshape image
     reshaped_image = tf.reshape(decoded_image, [360, 640, 3])
     # resize decoded image
-    resized_image = tf.image.resize_images(reshaped_image, [224, 224])
+    resized_image = tf.cast(tf.image.resize_images(reshaped_image, [224, 224]), tf.float32)
     # label
     label = tf.cast(parsed_features['image/class/label'], tf.int32)
 
@@ -108,7 +108,6 @@ def eval_input_fn():
   # Use `Dataset.map()` to build a pair of a feature dictionary and a label
   # tensor for each example.
   dataset = dataset.map(parse_function)
-  dataset = dataset.batch(1)
   iterator = dataset.make_one_shot_iterator()
 
   # `features` is a dictionary in which each value is a batch of values for
@@ -277,7 +276,7 @@ def model_fn(features, labels, mode):
 
   # Configure the Training Op (for TRAIN mode)
   if mode == tf.estimator.ModeKeys.TRAIN:
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=1e-3)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0)
     train_op = optimizer.minimize(
         loss=loss,
         global_step=tf.train.get_global_step())
@@ -292,24 +291,13 @@ def model_fn(features, labels, mode):
 
 
 def main(unused_argv):
-  # create input_fn for training
-  # train_data = train_data.map(parse_function)
-  # train_data = train_data.shuffle(buffer_size=10000)
-  # train_data = train_data.batch(32)
-  # train_data = train_data.repeat(10)
-  # train_iterator = train_data.make_one_shot_iterator()
-  # train_input_fn = train_iterator.get_next()
-
-  # # create input_fn for evaluation
-  # eval_data = eval_data.map(parse_function)
-  # eval_data = eval_data.batch(32)
-  # eval_data = eval_data.repeat(1)
-  # eval_iterator = eval_data.make_one_shot_iterator()
-  # eval_input_fn = eval_iterator.get_next()
-
   # Create the Estimator
-  pitch2d_predictor = tf.estimator.Estimator(
-      model_fn=model_fn, model_dir="/tmp/pitch2d_model")
+  # disable checkpoint saving
+  run_config = tf.estimator.RunConfig(save_summary_steps=None,
+                                    save_checkpoints_secs=None)
+  pitch2d_predictor = tf.estimator.Estimator(model_fn=model_fn,
+                                             model_dir="/tmp/pitch2d_model",
+                                             config=run_config)
 
   # Set up logging for predictions
   # Log the values in the "Softmax" tensor with label "probabilities"
