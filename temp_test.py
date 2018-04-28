@@ -1,40 +1,35 @@
-import tensorflow as tf
-# for displaying image
-from matplotlib import pyplot as plt
-import matplotlib.image as mpimg
-# for data operation
-import pandas as pd
+import cv2
 import numpy as np
+import tensorflow as tf
 
-np.set_printoptions(precision=3)
-# display function
-def display(alist, show = True):
-    print('type:%s\nshape: %s' %(alist[0].dtype,alist[0].shape))
-    if show:
-        for i in range(3):
-            print('example%s\n%s' %(i,alist[i]))
 
-scalars = np.array([1,2,3],dtype=np.int32)
-print('\nscalar')
-display(scalars)
+data_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/dataset_config/travaltes_20180420"
+height = 360
+width = 640
+channels = 3
 
-vectors = np.array([[0.1,0.1,0.1],
-                   [0.2,0.2,0.2],
-                   [0.3,0.3,0.3]],dtype=np.float32)
-print('\nvector')
-display(vectors)
-
-matrices = np.array([np.array((vectors[0],vectors[0])),
-                    np.array((vectors[1],vectors[1])),
-                    np.array((vectors[2],vectors[2]))],dtype=np.float32)
-print('\nmatrix')
-display(matrices)
-
-# shape of image:(806,806,3)
-img=mpimg.imread('/home/linzhank/playground/toy_imgs/Hank_study.jpeg') 
-tensors = np.array([img,img,img])
-# show image
-print('\n3D-tensor')
-display(tensors, show = False)
-plt.imshow(img)
-
+# Load training data
+pathfile_train = data_dir+"/train_paths.txt"
+labelfile_train = data_dir+"/train_labels.txt"
+# Read in training image file paths and load images accordingly
+with open(pathfile_train) as pf:
+    imgpaths = pf.readlines()
+    train_data = np.zeros((len(imgpaths), height, width, channels), dtype=np.float32)
+for i in range(len(imgpaths)):
+    train_data[i] = cv2.imread(imgpaths[i].split('\n')[0])
+    # Read in training label file paths and load labels
+    with open(labelfile_train) as lf:
+        train_labels = np.asarray(lf.read().splitlines(), dtype=np.int32)
+            
+# Load evaluation data
+pathfile_eval = data_dir+"/validate_paths.txt"
+labelfile_eval = data_dir+"/validate_labels.txt"
+# Read in evaluation image file paths and load images accordingly
+with open(pathfile_eval) as pf:
+    imgpaths = pf.readlines()
+    eval_data = np.zeros((len(imgpaths), height, width, channels), dtype=np.float32)
+for i in range(len(imgpaths)):
+    eval_data[i] = cv2.imread(imgpaths[i].split('\n')[0])
+    # Read in evaluation label file paths and load labels
+with open(labelfile_eval) as lf:
+    eval_labels = np.asarray(lf.read().splitlines(), dtype=np.int32)
