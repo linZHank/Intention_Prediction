@@ -21,11 +21,13 @@ import cv2
 import numpy as np
 import tensorflow as tf
 
-# data_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/dataset_config/travaltes_20180420"
-data_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/dataset_config/travaltes_20180415"
+import data_utils
+
+
+data_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/dataset_config/travaltes_20180420"
+# data_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/dataset_config/travaltes_20180415"
 height = 28
 width = 28
-channels = 1
 
 
 def cnn_model_fn(features, labels, mode):
@@ -120,37 +122,13 @@ def cnn_model_fn(features, labels, mode):
       mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)  
 
 def main(unused_argv):
-  # Load training data
-  pathfile_train = data_dir+"/train_paths.txt"
-  labelfile_train = data_dir+"/train_labels.txt"
-  # Read in training image file paths and load images accordingly
-  with open(pathfile_train) as pf:
-    imgpaths = pf.readlines()
-  train_data = np.zeros((len(imgpaths), height, width, channels), dtype=np.float32)
-  for i in range(len(imgpaths)):
-    train_data[i] = cv2.resize(cv2.imread(imgpaths[i].split('\n')[0]), (224, 224))
-  # Read in training label file paths and load labels
-  with open(labelfile_train) as lf:
-    train_labels = np.asarray(lf.read().splitlines(), dtype=np.int32)
-
-  # Load evaluation data
-  pathfile_eval = data_dir+"/validate_paths.txt"
-  labelfile_eval = data_dir+"/validate_labels.txt"
-  # Read in evaluation image file paths and load images accordingly
-  with open(pathfile_eval) as pf:
-    imgpaths = pf.readlines()
-  eval_data = np.zeros((len(imgpaths), height, width, channels), dtype=np.float32)
-  for i in range(len(imgpaths)):
-    eval_data[i] = cv2.resize(cv2.imread(imgpaths[i].split('\n')[0]), (224, 224))
-  # Read in evaluation label file paths and load labels
-  with open(labelfile_eval) as lf:
-    eval_labels = np.asarray(lf.read().splitlines(), dtype=np.int32)
+  # Load training and eval data
+  train_data, train_labels = data_utils.get_train_data()
+  eval_data, eval_labels = data_utils.get_eval_data()
 
   # Create the Estimator
-  est_config = tf.estimator.RunConfig(save_summary_steps=None,
-                                    save_checkpoints_secs=None)
-  intent_predictor = tf.estimator.Estimator(
-      model_fn=cnn_model_fn, config=est_config)
+  mnist_classifier = tf.estimator.Estimator(
+      model_fn=cnn_model_fn, model_dir="/tmp/mnist_convnet_model")
 
   # Set up logging for predictions
   # Log the values in the "Softmax" tensor with label "probabilities"
@@ -162,12 +140,12 @@ def main(unused_argv):
   train_input_fn = tf.estimator.inputs.numpy_input_fn(
       x={"x": train_data},
       y=train_labels,
-      batch_size=32,
-      num_epochs=128,
+      batch_size=100,
+      num_epochs=None,
       shuffle=True)
-  intent_predictor.train(
+  mnist_classifier.train(
       input_fn=train_input_fn,
-      steps=None,
+      steps=20000,
       hooks=[logging_hook])
 
   # Evaluate the model and print results
@@ -176,9 +154,8 @@ def main(unused_argv):
       y=eval_labels,
       num_epochs=1,
       shuffle=False)
-  eval_results = intent_predictor.evaluate(input_fn=eval_input_fn)
+  eval_results = mnist_classifier.evaluate(input_fn=eval_input_fn)
   print(eval_results)
-
 
 if __name__ == "__main__":
   tf.logging.set_verbosity(tf.logging.INFO)
