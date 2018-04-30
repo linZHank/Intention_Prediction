@@ -8,83 +8,98 @@ import numpy as np
 import os
 
 
-filedir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/dataset_config/travaltes_20180420"
-# filedir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/dataset_config/travaltes_20180415"
-width = 28
-height = 28
-imformat = 'gray'
-
-def load_images(datapaths, height, width, imformat='color'):
-  """Helper function for loading images and pre-processing 'em
+def load_images(imgpaths, h, w, imf='color'):
+  """Read in images and pre-processing 'em
 
   Args: 
-    datapaths: a list contains all the paths and names of the images we want to load
-    height: images resized height
-    width: images resized width
-    imformat: images loaded as color or grayscale
+    imgpaths: a list contains all the paths and names of the images we want to load
+    h: height image is going to resized to
+    width: width image is going to resized to
+    imf: image format when loaded as color or grayscale
   Returns:
-    image_data: 2-d array with shape [len(datapaths, height*width*num_channels)]
+    image_data: 2-d array with shape [len(imgpaths, h*w*num_channels)]
   """
-  if imformat == 'gray':
+  if imf == 'gray':
     num_chnls = 1
-  elif imformat =='color':
+  elif imf =='color':
     num_chnls = 3
-  image_data = np.empty([len(datapaths), height*width*num_chnls], dtype=np.float32)
-  for i in range(len(datapaths)):
-    # read in image according to imformat 
-    if imformat == 'gray':
-      img_raw = cv2.imread(datapaths[i], 0)
-    elif imformat == 'color':
-      img_raw = cv2.imread(datapaths[i], 1)
-    # resize image according to height and width
-    img_rsz = cv2.resize(img_raw, (height, width))
+  image_data = np.empty([len(imgpaths), h*w*num_chnls], dtype=np.float32)
+  for i in range(len(imgpaths)):
+    # read in image according to imf 
+    if imf == 'gray':
+      img_raw = cv2.imread(imgpaths[i], 0)
+    elif imf == 'color':
+      img_raw = cv2.imread(imgpaths[i], 1)
+    # resize image according to h and w
+    img_rsz = cv2.resize(img_raw, (h, w))
     # flatten image tensor to 1-d and save into the image_data array
-    image_data[i] = np.resize(img_rsz, (height*width*num_chnls))
+    image_data[i] = np.resize(img_rsz, (h*w*num_chnls))
 
   return image_data
 
-def load_files(fdir, usage, contents):
+def load_files(fdir, usg, ctns):
   """Generate list of paths and files, which are going to be loaded later
 
   Args:
-    fdir: directory to the files that contains all data files
-    usage: purpose of the file: train, validate or test
-    content:  contents type of file: paths or labels
+    fdir: directory to all data files
+    usg: purpose of the file: train, eval or test
+    cnts:  contents type in file: paths or labels
     Returns:
-    datapaths: list of data file paths
+    contents: list of contents in the file
   """
-  fnames = os.path.join(fdir, usage+'_'+contents+'.txt')
+  fnames = os.path.join(fdir, usg+"_"+ctns+".txt")
   with open(fnames) as f:
-    datapaths = f.read().splitlines()
-  return datapaths
+    contents = f.read().splitlines()
+  return contents
 
-def get_train_data():
-  train_images_paths = load_files(fdir=filedir,
-                                  usage='train',
-                                  contents='paths')
-  train_images = load_images(datapaths=train_images_paths,
-                             height=height,
-                             width=width,
-                             imformat=imformat)
+def get_train_data(filedir, height, width, imformat):
+  """Helper function get data and lables for training
+  
+  Args:
+    filedir: directory to all the data files
+    usage: purpose of the file: train, eval and test
+    contents: what's inside the file? image 'paths' or 'labels'
+    height: image is going to resized to
+    width: image is going to resized to
+    imformat: image reading format, 'gray' for 1 channel or 'color' for 3 channels
+  Returns:
+    train_images: feed ready image data array in shape (num_examples, height, width, channels)
+    train_labels: feed read image labels array in shape (num_examples,)
+  """
+  train_images_paths = load_files(filedir,
+                                  "train",
+                                  "paths")
+  train_images = load_images(train_images_paths, height, width, imformat)
 
-  train_labels_paths = load_files(fdir=filedir,
-                                  usage='train',
-                                  contents='labels')
-  train_labels = np.asarray(train_labels_paths, dtype=np.int32)
+  train_labels_list = load_files(filedir,
+                                 "train",
+                                 "labels")
+  train_labels = np.asarray(train_labels_list, dtype=np.int32)
     
   return train_images, train_labels
 
-def get_eval_data():
-  eval_images_paths = load_files(fdir=filedir,
-                                 usage='validate',
-                                 contents='paths')
-  eval_images = load_images(datapaths=eval_images_paths,
-                            height=height,
-                            width=width,
-                            imformat=imformat)
-  eval_labels_paths = load_files(fdir=filedir,
-                                 usage='validate',
-                                 contents='labels')
-  eval_labels = np.asarray(eval_labels_paths, dtype=np.int32)
+def get_eval_data(filedir, height, width, imformat):
+  """Helper function get data and lables for evaling
+  
+  Args:
+    filedir: directory to all the data files
+    usage: purpose of the file: train, eval and test
+    contents: what's inside the file? image 'paths' or 'labels'
+    height: image is going to resized to
+    width: image is going to resized to
+    imformat: image reading format, 'gray' for 1 channel or 'color' for 3 channels
+  Returns:
+    eval_images: feed ready image data array in shape (num_examples, height, width, channels)
+    eval_labels: feed read image labels array in shape (num_examples,)
+  """
+  eval_images_paths = load_files(filedir,
+                                  "validate",
+                                  "paths")
+  eval_images = load_images(eval_images_paths, height, width, imformat)
+
+  eval_labels_list = load_files(filedir,
+                                 "validate",
+                                 "labels")
+  eval_labels = np.asarray(eval_labels_list, dtype=np.int32)
     
   return eval_images, eval_labels
