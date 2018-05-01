@@ -1,17 +1,6 @@
-#  Copyright 2016 The TensorFlow Authors. All Rights Reserved.
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#   http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
-"""Convolutional Neural Network Estimator for MNIST, built with tf.layers."""
+# data: 1-d numpy array
+# model: same as self-developed 2017 model: https://drive.google.com/drive/u/1/folders/0B48QxlXgxW-GdGJ0M1ZNZDlrbW8
+"""AlexNet Intention Predictor for pitch2d, built with tf.layers."""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -25,8 +14,8 @@ import data_utils
 
 
 
-# data_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/dataset_config/travaltes_20180420"
-file_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/dataset_config/travaltes_20180415"
+file_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/dataset_config/travaltes_20180420"
+# file_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/dataset_config/travaltes_20180415"
 height = 224
 width = 224
 img_format = "color"
@@ -68,7 +57,7 @@ def cnn_model_fn(features, labels, mode):
   # Output Tensor Shape: [batch_size, 27, 27, 96]
   pool1 = tf.layers.max_pooling2d(
     inputs=lrn1,
-    pool_size=2,
+    pool_size=3,
     strides=2)
 
   # Convolutional Layer #2
