@@ -152,7 +152,7 @@ def model_fn(features, labels, mode):
   # Output Tensor Shape: [batch_size, 27, 27, 96]
   pool1 = tf.layers.max_pooling2d(
     inputs=lrn1,
-    pool_size=2,
+    pool_size=3,
     strides=2)
 
   # Convolutional Layer #2
@@ -234,7 +234,10 @@ def model_fn(features, labels, mode):
   # Flatten tensor into a batch of vectors
   # Input Tensor Shape: [batch_size, 6, 6, 256]
   # Output Tensor Shape: [batch_size, 6 * 6 * 256]
-  pool5_flat = tf.reshape(pool5, [-1, 6 * 6 * 256])
+  poo5_shape = poo5.get_shape()
+  num_features = pool5_shape[1:4].num_elements()
+  poo5_flat = tf.reshape(pool5, [-1, num_features])
+  # pool5_flat = tf.reshape(pool5, [-1, 6 * 6 * 256])
 
   # Dense Layer #1
   # Densely connected layer with 4096 neurons
@@ -296,8 +299,7 @@ def main(unused_argv):
   run_config = tf.estimator.RunConfig(save_summary_steps=None,
                                     save_checkpoints_secs=None)
   pitch2d_predictor = tf.estimator.Estimator(model_fn=model_fn,
-                                             model_dir="/tmp/pitch2d_model",
-                                             config=run_config)
+                                             config=run_config) # use model_dir to restore model
 
   # Set up logging for predictions
   # Log the values in the "Softmax" tensor with label "probabilities"

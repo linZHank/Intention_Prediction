@@ -28,131 +28,106 @@ def cnn_model_fn(features, labels, mode):
   # Pitch2d images are 224x224 pixels, and have 3 color channel
   input_layer = tf.reshape(features["x"], [-1, height, width, num_channels])
 
-    # Convolutional Layer #1
+  # Convolutional Layer #1
   # Computes 96 features using a 11x11x3 filter with step of 4 plus ReLU activation.
   # Padding is added to preserve width and height.
   # Input Tensor Shape: [batch_size, 224, 224, 3]
   # Output Tensor Shape: [batch_size, 55, 55, 96]
-  conv1 = tf.layers.conv2d(
-    inputs=input_layer,
-    filters=96,
-    kernel_size=11,
-    strides=4,
-    padding="same",
-    activation=tf.nn.relu,
-    name="conv1")
-
-  # Local Response Normalization Layer #1
-  # sqr_sum[a, b, c, d] = sum(input[a, b, c, d - depth_radius : d + depth_radius + 1] ** 2)
-  # output = input / (bias + alpha * sqr_sum) ** beta
-  lrn1 = tf.nn.local_response_normalization(
-    input=conv1,
-    depth_radius=5,
-    bias=2,
-    alpha=1e-4,
-    beta=0.75,
-    name="lrn1")
+  conv1 = tf.layers.conv2d(inputs=input_layer,
+                           filters=96,
+                           kernel_size=11,
+                           strides=4,
+                           padding="same")
 
   # Pooling Layer #1
   # First max pooling layer with a 3x3 filter and stride of 2
   # Input Tensor Shape: [batch_size, 55, 55, 96]
   # Output Tensor Shape: [batch_size, 27, 27, 96]
-  pool1 = tf.layers.max_pooling2d(
-    inputs=lrn1,
-    pool_size=3,
-    strides=2,
-    name="pool1")
-  
+  pool1 = tf.layers.max_pooling2d(inputs=conv1,
+                                  pool_size=3,
+                                  strides=2,
+                                  padding="same")
+
+  # Local Response Normalization Layer #1
+  # sqr_sum[a, b, c, d] = sum(input[a, b, c, d - depth_radius : d + depth_radius + 1] ** 2)
+  # output = input / (bias + alpha * sqr_sum) ** beta
+  lrn1 = tf.nn.local_response_normalization(input=pool1)
+
   # Convolutional Layer #2
   # Computes 256 features using a 5x5x96 filter.
   # Padding is added to preserve width and height.
   # Input Tensor Shape: [batch_size, 27, 27, 96]
   # Output Tensor Shape: [batch_size, 27, 27, 256]
-  conv2 = tf.layers.conv2d(
-    inputs=pool1,
-    filters=256,
-    kernel_size=5,
-    padding="same",
-    activation=tf.nn.relu,
-    name="conv2")
-
-  # Local Response Normalization Layer #2
-  # sqr_sum[a, b, c, d] = sum(input[a, b, c, d - depth_radius : d + depth_radius + 1] ** 2)
-  # output = input / (bias + alpha * sqr_sum) ** beta
-  lrn2 = tf.nn.local_response_normalization(
-      input=conv2,
-      depth_radius=5,
-      bias=2,
-      alpha=1e-4,
-      beta=0.75)
+  conv2 = tf.layers.conv2d(inputs=lrn1,
+                           filters=256,
+                           kernel_size=5,
+                           padding="same")
 
   # Pooling Layer #2
   # Second max pooling layer with a 3x3 filter and stride of 2
   # Input Tensor Shape: [batch_size, 27, 27, 256]
   # Output Tensor Shape: [batch_size, 13, 13, 256]
-  pool2 = tf.layers.max_pooling2d(
-    inputs=lrn2,
-    pool_size=3,
-    strides=2)
+  pool2 = tf.layers.max_pooling2d(inputs=conv2,
+                                  pool_size=3,
+                                  strides=2,
+                                  padding="same")
 
+  # Local Response Normalization Layer #2
+  # sqr_sum[a, b, c, d] = sum(input[a, b, c, d - depth_radius : d + depth_radius + 1] ** 2)
+  # output = input / (bias + alpha * sqr_sum) ** beta
+  lrn2 = tf.nn.local_response_normalization(input=pool2)
+  
   # Convolutional Layer #3
   # Computes 384 features using a 3x3x256 filter.
   # Padding is added to preserve width and height.
   # Input Tensor Shape: [batch_size, 13, 13, 256]
   # Output Tensor Shape: [batch_size, 13, 13, 384]
-  conv3 = tf.layers.conv2d(
-      inputs=pool2,
-      filters=384,
-      kernel_size=3,
-      padding="same",
-      activation=tf.nn.relu)
+  conv3 = tf.layers.conv2d(inputs=lrn2,
+                           filters=384,
+                           kernel_size=3,
+                           padding="same",
+                           activation=tf.nn.relu)
 
   # Convolutional Layer #4
   # Computes 384 features using a 3x3x384 filter.
   # Padding is added to preserve width and height.
   # Input Tensor Shape: [batch_size, 13, 13, 384]
   # Output Tensor Shape: [batch_size, 13, 13, 384]
-  conv4 = tf.layers.conv2d(
-      inputs=conv3,
-      filters=384,
-      kernel_size=3,
-      padding="same",
-      activation=tf.nn.relu)
+  conv4 = tf.layers.conv2d(inputs=conv3,
+                           filters=384,
+                           kernel_size=3,
+                           padding="same")
 
   # Convolutional Layer #5
   # Computes 256 features using a 3x3x384 filter.
   # Padding is added to preserve width and height.
   # Input Tensor Shape: [batch_size, 13, 13, 384]
   # Output Tensor Shape: [batch_size, 13, 13, 256]
-  conv5 = tf.layers.conv2d(
-      inputs=conv4,
-      filters=256,
-      kernel_size=3,
-      padding="same",
-      activation=tf.nn.relu)
+  conv5 = tf.layers.conv2d(inputs=conv4,
+                           filters=256,
+                           kernel_size=3,
+                           padding="same")
   
   # Pooling Layer #5
   # Second max pooling layer with a 3x3 filter and stride of 2
   # Input Tensor Shape: [batch_size, 13, 13, 256]
   # Output Tensor Shape: [batch_size, 5, 5, 256]
-  pool5 = tf.layers.max_pooling2d(
-    inputs=conv5,
-    pool_size=3,
-    strides=2)
+  # pool5 = tf.layers.max_pooling2d(inputs=conv5,
+  #                                 pool_size=3,
+  #                                 strides=2)
 
   # Flatten tensor into a batch of vectors
   # Input Tensor Shape: [batch_size, 6, 6, 256]
   # Output Tensor Shape: [batch_size, 6 * 6 * 256]
-  poo5_shape = poo5.get_shape()
-  num_features = pool5_shape[1:4].num_elements()
-  poo5_flat = tf.reshape(pool5, [-1, num_features])
-  # pool5_flat = tf.reshape(pool5, [-1, 6 * 6 * 256])
+  conv5_shape = conv5.get_shape()
+  num_features = conv5_shape[1:4].num_elements()
+  conv5_flat = tf.reshape(conv5, [-1, num_features])
 
   # Dense Layer #1
   # Densely connected layer with 4096 neurons
   # Input Tensor Shape: [batch_size, 5 * 5 * 256]
   # Output Tensor Shape: [batch_size, 4096]
-  dense1 = tf.layers.dense(inputs=pool5_flat, units=4096, activation=tf.nn.relu)
+  dense1 = tf.layers.dense(inputs=conv5_flat, units=4096)
 
   # Add dropout operation; 0.5 probability that element will be kept
   dropout1 = tf.layers.dropout(
@@ -162,15 +137,15 @@ def cnn_model_fn(features, labels, mode):
   # Densely connected layer with 4096 neurons
   # Input Tensor Shape: [batch_size, 4096]
   # Output Tensor Shape: [batch_size, 4096]
-  dense2 = tf.layers.dense(inputs=dense1, units=4096, activation=tf.nn.relu)
+  dense2 = tf.layers.dense(inputs=dense1, units=4096)
 
   # Add dropout operation; 0.5 probability that element will be kept
   dropout2 = tf.layers.dropout(
       inputs=dense2, rate=0.5, training=mode == tf.estimator.ModeKeys.TRAIN)
 
   # Logits layer
-  # Input Tensor Shape: [batch_size, 1024]
-  # Output Tensor Shape: [batch_size, 10]
+  # Input Tensor Shape: [batch_size, 4096]
+  # Output Tensor Shape: [batch_size, 9]
   logits = tf.layers.dense(inputs=dropout2, units=9)
 
   predictions = {
