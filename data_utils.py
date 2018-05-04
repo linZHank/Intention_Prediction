@@ -75,8 +75,13 @@ def get_train_data(filedir, height, width, imformat):
                                  "train",
                                  "labels")
   train_labels = np.asarray(train_labels_list, dtype=np.int32)
+
+  # shuffle
+  assert len(train_images) == len(train_labels)
+  for _ in range(1000):
+    p = np.random.permutation(len(train_images))
     
-  return train_images, train_labels
+  return train_images[p], train_labels[p]
 
 def get_eval_data(filedir, height, width, imformat):
   """Helper function get data and lables for evaling

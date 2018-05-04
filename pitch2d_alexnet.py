@@ -29,7 +29,7 @@ train_filenames = glob.glob(os.path.join(tfrecords_dir, 'train*'))
 eval_filenames = glob.glob(os.path.join(tfrecords_dir, 'validate*'))
 
 def train_input_fn():
-  dataset = tf.data.TFRecordDataset(train_filenames)
+  dataset = tf.data.TFRecordDataset(train_filenames, num_parallel_reads=8)
   def parse_function(example_proto):
     # example_proto, tf_serialized
     features = {'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
@@ -53,8 +53,9 @@ def train_input_fn():
     # resize decoded image
     resized_image = tf.cast(tf.image.resize_images(reshaped_image, [224, 224]), tf.float32)
     # label
-    label = tf.cast(parsed_features['image/class/label'], tf.int32)
-
+    label = tf.cast(parsed_features['image/class/label']-1, tf.int32)
+    # label = tf.one_hot(indices=label-1, depth=9)
+    
     return {"image_bytes": parsed_features['image/encoded'],
             "image_decoded": decoded_image,
             "image_reshaped": reshaped_image,
@@ -63,8 +64,8 @@ def train_input_fn():
   # Use `Dataset.map()` to build a pair of a feature dictionary and a label
   # tensor for each example.
   dataset = dataset.map(parse_function)
-  dataset = dataset.shuffle(buffer_size=1024)
-  dataset = dataset.batch(128)
+  dataset = dataset.shuffle(1024)
+  dataset = dataset.batch(32)
   dataset = dataset.repeat(128)
   iterator = dataset.make_one_shot_iterator()
 
@@ -98,8 +99,9 @@ def eval_input_fn():
     # resize decoded image
     resized_image = tf.cast(tf.image.resize_images(reshaped_image, [224, 224]), tf.float32)
     # label
-    label = tf.cast(parsed_features['image/class/label'], tf.int32)
-
+    label = tf.cast(parsed_features['image/class/label']-1, tf.int32)
+    # label = tf.one_hot(indices=label-1, depth=9)
+    
     return {"image_bytes": parsed_features['image/encoded'],
             "image_decoded": decoded_image,
             "image_reshaped": reshaped_image,
@@ -234,9 +236,9 @@ def model_fn(features, labels, mode):
   # Flatten tensor into a batch of vectors
   # Input Tensor Shape: [batch_size, 6, 6, 256]
   # Output Tensor Shape: [batch_size, 6 * 6 * 256]
-  poo5_shape = poo5.get_shape()
+  pool5_shape = pool5.get_shape()
   num_features = pool5_shape[1:4].num_elements()
-  poo5_flat = tf.reshape(pool5, [-1, num_features])
+  pool5_flat = tf.reshape(pool5, [-1, num_features])
   # pool5_flat = tf.reshape(pool5, [-1, 6 * 6 * 256])
 
   # Dense Layer #1
@@ -279,7 +281,7 @@ def model_fn(features, labels, mode):
 
   # Configure the Training Op (for TRAIN mode)
   if mode == tf.estimator.ModeKeys.TRAIN:
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0)
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=1e-5)
     train_op = optimizer.minimize(
         loss=loss,
         global_step=tf.train.get_global_step())
@@ -309,7 +311,6 @@ def main(unused_argv):
 
   # Train the model
   pitch2d_predictor.train(input_fn=train_input_fn,
-                          steps=128,
                           hooks=[logging_hook]) # used to have a "step" argument
 
   # Evaluate the model and print results

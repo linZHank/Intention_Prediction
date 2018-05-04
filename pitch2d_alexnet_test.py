@@ -143,9 +143,9 @@ def cnn_model_fn(features, labels, mode):
   # Flatten tensor into a batch of vectors
   # Input Tensor Shape: [batch_size, 6, 6, 256]
   # Output Tensor Shape: [batch_size, 6 * 6 * 256]
-  poo5_shape = poo5.get_shape()
+  pool5_shape = pool5.get_shape()
   num_features = pool5_shape[1:4].num_elements()
-  poo5_flat = tf.reshape(pool5, [-1, num_features])
+  pool5_flat = tf.reshape(pool5, [-1, num_features])
   # pool5_flat = tf.reshape(pool5, [-1, 6 * 6 * 256])
 
   # Dense Layer #1
@@ -171,7 +171,7 @@ def cnn_model_fn(features, labels, mode):
   # Logits layer
   # Input Tensor Shape: [batch_size, 1024]
   # Output Tensor Shape: [batch_size, 10]
-  logits = tf.layers.dense(inputs=dropout2, units=9)
+  logits = tf.layers.dense(inputs=dropout2, units=9) + 1e-7
 
   predictions = {
       # Generate predictions (for PREDICT and EVAL mode)
