@@ -21,6 +21,7 @@ import numpy as np
 import tensorflow as tf
 import os
 import glob
+import time
 
 
 tfrecords_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/tfrecord_20180418"
@@ -65,7 +66,7 @@ def train_input_fn():
   # tensor for each example.
   dataset = dataset.map(parse_function)
   dataset = dataset.shuffle(1024)
-  dataset = dataset.batch(32)
+  dataset = dataset.batch(128)
   dataset = dataset.repeat(128)
   iterator = dataset.make_one_shot_iterator()
 
@@ -298,6 +299,7 @@ def model_fn(features, labels, mode):
 def main(unused_argv):
   # Create the Estimator
   # disable checkpoint saving
+  start = time.time()
   run_config = tf.estimator.RunConfig(save_summary_steps=None,
                                     save_checkpoints_secs=None)
   pitch2d_predictor = tf.estimator.Estimator(model_fn=model_fn,
@@ -316,6 +318,8 @@ def main(unused_argv):
   # Evaluate the model and print results
   eval_results = pitch2d_predictor.evaluate(input_fn=eval_input_fn)
   print(eval_results)
+  end = time.time()
+  print("Time elapsed: {}".format(end-start))
 
 
 if __name__ == "__main__":
