@@ -24,8 +24,8 @@ import glob
 import time
 
 
-tfrecords_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/tfrecord_20180418"
-# tfrecords_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/tfrecord_20180423"  
+# tfrecords_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/tfrecord_20180418"
+tfrecords_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/tfrecord_20180423"  
 train_filenames = glob.glob(os.path.join(tfrecords_dir, 'train*'))
 eval_filenames = glob.glob(os.path.join(tfrecords_dir, 'validate*'))
 
@@ -66,7 +66,7 @@ def train_input_fn():
   # tensor for each example.
   dataset = dataset.map(parse_function)
   dataset = dataset.shuffle(1024)
-  dataset = dataset.batch(128)
+  dataset = dataset.batch(64)
   dataset = dataset.repeat(128)
   iterator = dataset.make_one_shot_iterator()
 
@@ -299,11 +299,11 @@ def model_fn(features, labels, mode):
 def main(unused_argv):
   # Create the Estimator
   # disable checkpoint saving
-  start = time.time()
-  run_config = tf.estimator.RunConfig(save_summary_steps=None,
-                                    save_checkpoints_secs=None)
+  start_time = time.time()
+  # run_config = tf.estimator.RunConfig(save_summary_steps=None,
+  #                                   save_checkpoints_secs=None)
   pitch2d_predictor = tf.estimator.Estimator(model_fn=model_fn,
-                                             config=run_config) # use model_dir to restore model
+                                             model_dir="/tmp/pitch2d_alexnet_model") # use model_dir to restore model
 
   # Set up logging for predictions
   # Log the values in the "Softmax" tensor with label "probabilities"
@@ -318,8 +318,8 @@ def main(unused_argv):
   # Evaluate the model and print results
   eval_results = pitch2d_predictor.evaluate(input_fn=eval_input_fn)
   print(eval_results)
-  end = time.time()
-  print("Time elapsed: {}".format(end-start))
+  end_time = time.time()
+  print("Time elapsed: {}".format(end_time-start_time))
 
 
 if __name__ == "__main__":
