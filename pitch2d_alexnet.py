@@ -30,23 +30,23 @@ train_filenames = glob.glob(os.path.join(tfrecords_dir, 'train*'))
 eval_filenames = glob.glob(os.path.join(tfrecords_dir, 'validate*'))
 
 def train_input_fn():
-  dataset = tf.data.TFRecordDataset(train_filenames, num_parallel_reads=8)
+  dataset = tf.data.TFRecordDataset(train_filenames, num_parallel_reads=16)
   def parse_function(example_proto):
     # example_proto, tf_serialized
-    features = {'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
-                'image/channels': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=3), 
-                'image/format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="PNG"), 
-                'image/filename': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
-                'image/encoded': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
-                'image/class/label': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=1),
-                'image/height': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=360),
-                'image/width': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=640),
-                'image/pitcher': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
-                'image/trial': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
-                'image/frame': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="")}
+    feats = {'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
+             'image/channels': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=3), 
+             'image/format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="PNG"), 
+             'image/filename': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+             'image/encoded': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+             'image/class/label': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=1),
+             'image/height': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=360),
+             'image/width': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=640),
+             'image/pitcher': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+             'image/trial': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+             'image/frame': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="")}
     
     # parse all features in a single example according to the dics
-    parsed_features = tf.parse_single_example(example_proto, features)
+    parsed_features = tf.parse_single_example(example_proto, feats)
     # decode the encoded image to the (360, 640, 3) uint8 array
     decoded_image = tf.image.decode_image((parsed_features['image/encoded']))
     # reshape image
@@ -67,7 +67,8 @@ def train_input_fn():
   dataset = dataset.map(parse_function)
   dataset = dataset.shuffle(1024)
   dataset = dataset.batch(64)
-  dataset = dataset.repeat(128)
+  # dataset = dataset.repeat(128)
+  dataset = dataset.repeat(1) # debug 
   iterator = dataset.make_one_shot_iterator()
 
   # `features` is a dictionary in which each value is a batch of values for
@@ -76,23 +77,23 @@ def train_input_fn():
   return features, labels
 
 def eval_input_fn():
-  dataset = tf.data.TFRecordDataset(eval_filenames)
+  dataset = tf.data.TFRecordDataset(eval_filenames, num_parallel_reads=8)
   def parse_function(example_proto):
     # example_proto, tf_serialized
-    features = {'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
-                'image/channels': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=3), 
-                'image/format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="PNG"), 
-                'image/filename': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
-                'image/encoded': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
-                'image/class/label': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=1),
-                'image/height': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=360),
-                'image/width': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=640),
-                'image/pitcher': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
-                'image/trial': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
-                'image/frame': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="")}
+    feats = {'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
+             'image/channels': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=3), 
+             'image/format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="PNG"), 
+             'image/filename': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+             'image/encoded': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+             'image/class/label': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=1),
+             'image/height': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=360),
+             'image/width': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=640),
+             'image/pitcher': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+             'image/trial': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+             'image/frame': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="")}
     
     # parse all features in a single example according to the dics
-    parsed_features = tf.parse_single_example(example_proto, features)
+    parsed_features = tf.parse_single_example(example_proto, feats)
     # decode the encoded image to the (360, 640, 3) uint8 array
     decoded_image = tf.image.decode_image((parsed_features['image/encoded']))
     # reshape image
