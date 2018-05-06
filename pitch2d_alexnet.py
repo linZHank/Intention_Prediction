@@ -24,8 +24,8 @@ import glob
 import time
 
 
-# tfrecords_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/tfrecord_20180418"
-tfrecords_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/tfrecord_20180423"  
+tfrecords_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/tfrecord_20180418"
+# tfrecords_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/tfrecord_20180423"  
 train_filenames = glob.glob(os.path.join(tfrecords_dir, 'train*'))
 eval_filenames = glob.glob(os.path.join(tfrecords_dir, 'validate*'))
 
@@ -33,20 +33,21 @@ def train_input_fn():
   dataset = tf.data.TFRecordDataset(train_filenames, num_parallel_reads=16)
   def parse_function(example_proto):
     # example_proto, tf_serialized
-    feats = {'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
-             'image/channels': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=3), 
-             'image/format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="PNG"), 
-             'image/filename': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
-             'image/encoded': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
-             'image/class/label': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=1),
-             'image/height': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=360),
-             'image/width': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=640),
-             'image/pitcher': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
-             'image/trial': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
-             'image/frame': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="")}
-    
+    keys_to_features = {
+      'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
+      'image/channels': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=3), 
+      'image/format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="PNG"), 
+      'image/filename': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+      'image/encoded': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+      'image/class/label': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=1),
+      'image/height': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=360),
+      'image/width': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=640),
+      'image/pitcher': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+      'image/trial': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+      'image/frame': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="")
+    }
     # parse all features in a single example according to the dics
-    parsed_features = tf.parse_single_example(example_proto, feats)
+    parsed_features = tf.parse_single_example(example_proto, keys_to_features)
     # decode the encoded image to the (360, 640, 3) uint8 array
     decoded_image = tf.image.decode_image((parsed_features['image/encoded']))
     # reshape image
@@ -60,7 +61,8 @@ def train_input_fn():
     return {"image_bytes": parsed_features['image/encoded'],
             "image_decoded": decoded_image,
             "image_reshaped": reshaped_image,
-            "image_resized": resized_image}, label
+            "image_resized": resized_image,
+            "label": label}
 
   # Use `Dataset.map()` to build a pair of a feature dictionary and a label
   # tensor for each example.
@@ -73,27 +75,28 @@ def train_input_fn():
 
   # `features` is a dictionary in which each value is a batch of values for
   # that feature; `labels` is a batch of labels.
-  features, labels = iterator.get_next()
-  return features, labels
+  features = iterator.get_next()
+  return features
 
 def eval_input_fn():
   dataset = tf.data.TFRecordDataset(eval_filenames, num_parallel_reads=8)
   def parse_function(example_proto):
     # example_proto, tf_serialized
-    feats = {'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
-             'image/channels': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=3), 
-             'image/format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="PNG"), 
-             'image/filename': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
-             'image/encoded': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
-             'image/class/label': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=1),
-             'image/height': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=360),
-             'image/width': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=640),
-             'image/pitcher': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
-             'image/trial': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
-             'image/frame': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="")}
-    
+    keys_to_features = {
+      'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
+      'image/channels': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=3), 
+      'image/format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="PNG"), 
+      'image/filename': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+      'image/encoded': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+      'image/class/label': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=1),
+      'image/height': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=360),
+      'image/width': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=640),
+      'image/pitcher': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+      'image/trial': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+      'image/frame': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="")
+    }
     # parse all features in a single example according to the dics
-    parsed_features = tf.parse_single_example(example_proto, feats)
+    parsed_features = tf.parse_single_example(example_proto, keys_to_features)
     # decode the encoded image to the (360, 640, 3) uint8 array
     decoded_image = tf.image.decode_image((parsed_features['image/encoded']))
     # reshape image
@@ -107,7 +110,8 @@ def eval_input_fn():
     return {"image_bytes": parsed_features['image/encoded'],
             "image_decoded": decoded_image,
             "image_reshaped": reshaped_image,
-            "image_resized": resized_image}, label
+            "image_resized": resized_image,
+            "label": label}
 
   # Use `Dataset.map()` to build a pair of a feature dictionary and a label
   # tensor for each example.
@@ -116,8 +120,8 @@ def eval_input_fn():
 
   # `features` is a dictionary in which each value is a batch of values for
   # that feature; `labels` is a batch of labels.
-  features, labels = iterator.get_next()
-  return features, labels
+  features = iterator.get_next()
+  return features
 
 
 def model_fn(features, labels, mode):
@@ -270,6 +274,7 @@ def model_fn(features, labels, mode):
 
   predictions = {
       # Generate predictions (for PREDICT and EVAL mode)
+      # "classes": tf.one_hot(indices=tf.argmax(input=logits), depth=9),
       "classes": tf.argmax(input=logits, axis=1),
       # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
       # `logging_hook`.
@@ -279,8 +284,8 @@ def model_fn(features, labels, mode):
     return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
 
   # Calculate Loss (for both TRAIN and EVAL modes)
-  loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
-
+  loss = tf.losses.sparse_softmax_cross_entropy(labels=features["label"], logits=logits)
+  # loss = tf.losses.softmax_cross_entropy(onehot_labels=features["label"], logits=logits)
   # Configure the Training Op (for TRAIN mode)
   if mode == tf.estimator.ModeKeys.TRAIN:
     optimizer = tf.train.GradientDescentOptimizer(learning_rate=1e-5)
@@ -292,7 +297,7 @@ def model_fn(features, labels, mode):
   # Add evaluation metrics (for EVAL mode)
   eval_metric_ops = {
       "accuracy": tf.metrics.accuracy(
-          labels=labels, predictions=predictions["classes"])}
+          labels=features["label"], predictions=predictions["classes"])}
   return tf.estimator.EstimatorSpec(
       mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
@@ -301,10 +306,11 @@ def main(unused_argv):
   # Create the Estimator
   # disable checkpoint saving
   start_time = time.time()
-  # run_config = tf.estimator.RunConfig(save_summary_steps=None,
-  #                                   save_checkpoints_secs=None)
+  run_config = tf.estimator.RunConfig(save_summary_steps=None,
+                                      save_checkpoints_secs=None)
   pitch2d_predictor = tf.estimator.Estimator(model_fn=model_fn,
-                                             model_dir="/tmp/pitch2d_alexnet_model") # use model_dir to restore model
+                                             model_dir="/tmp/pitch2d_alexnet_model")
+                                             # config=run_config,) # use model_dir to restore model
 
   # Set up logging for predictions
   # Log the values in the "Softmax" tensor with label "probabilities"
