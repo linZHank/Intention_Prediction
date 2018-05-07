@@ -108,3 +108,17 @@ def get_eval_data(filedir, height, width, imformat):
   eval_labels = np.asarray(eval_labels_list, dtype=np.int32)
     
   return eval_images, eval_labels
+
+def make_input_fn(filenames, num_threads, name, batch_size=64, buffer_size=4096):
+  """Make input function for Estimator API
+  
+  Args:
+    filenames: list of TFRecord filenames
+    name: specify purpose of input_fn: train or eval
+    batch_size:
+    buffer_size: random shuffling is done on the buffer, so it must be big enough
+  Returns:
+    features:
+    labels:
+  """
+  dataset = tf.data.TFRecordDataset(filenames, num_parallel_reads=num_threads)

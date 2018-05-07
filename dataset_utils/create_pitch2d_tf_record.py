@@ -82,8 +82,8 @@ import tensorflow as tf
 
 import pdb
 
-# DATA_DIR = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
-DATA_DIR = '/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk'
+DATA_DIR = '/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk'
+# DATA_DIR = '/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk'
 TODAY = datetime.today().strftime("%Y%m%d")
 
 tf.app.flags.DEFINE_string('data_dir', DATA_DIR, 'The original dataset lies here')
@@ -130,17 +130,18 @@ def convert_to_example(filename, image_buffer, label, height, width,
   image_format = 'PNG'
 
   example = tf.train.Example(features=tf.train.Features(feature={
-      'image/colorspace': bytes_feature(colorspace),
-      'image/channels': int64_feature(channels),
-      'image/format': bytes_feature(image_format),
-      'image/filename': bytes_feature(os.path.basename(filename)),
-      'image/encoded': bytes_feature(image_buffer),
-      'image/class/label': int64_feature(label),
-      'image/height': int64_feature(height),
-      'image/width': int64_feature(width),
-      'image/pitcher': bytes_feature(pitcher),
-      'image/trial': bytes_feature(trial),
-      'image/frame': bytes_feature(frame)}))
+      "colorspace": bytes_feature(colorspace),
+      "channels": int64_feature(channels),
+      "format": bytes_feature(image_format),
+      "filename": bytes_feature(os.path.basename(filename)),
+      "encoded_image": bytes_feature(image_buffer),
+      "label": int64_feature(label),
+      "height": int64_feature(height),
+      "width": int64_feature(width),
+      "pitcher": bytes_feature(pitcher),
+      "trial": bytes_feature(trial),
+      "frame": bytes_feature(frame)
+  }))
 
   return example
 
@@ -296,7 +297,7 @@ def read_annotation_files(name, directory):
 
   
 def process_dataset(name, directory, num_shards):
-  """Process a complete data set and save it as a TFRecord.
+  """Process a complete data set and save it as TFRecord shards.
 
   Args:
     name: string, specifies dataset storing location.

@@ -78,51 +78,6 @@ def train_input_fn():
   features = iterator.get_next()
   return features
 
-def eval_input_fn():
-  dataset = tf.data.TFRecordDataset(eval_filenames, num_parallel_reads=8)
-  def parse_function(example_proto):
-    # example_proto, tf_serialized
-    keys_to_features = {
-      'image/colorspace': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
-      'image/channels': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=3), 
-      'image/format': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="PNG"), 
-      'image/filename': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
-      'image/encoded': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
-      'image/class/label': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=1),
-      'image/height': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=360),
-      'image/width': tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=640),
-      'image/pitcher': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
-      'image/trial': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
-      'image/frame': tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="")
-    }
-    # parse all features in a single example according to the dics
-    parsed_features = tf.parse_single_example(example_proto, keys_to_features)
-    # decode the encoded image to the (360, 640, 3) uint8 array
-    decoded_image = tf.image.decode_image((parsed_features['image/encoded']))
-    # reshape image
-    reshaped_image = tf.reshape(decoded_image, [360, 640, 3])
-    # resize decoded image
-    resized_image = tf.cast(tf.image.resize_images(reshaped_image, [224, 224]), tf.float32)
-    # label
-    label = tf.cast(parsed_features['image/class/label']-1, tf.int32)
-    # label = tf.one_hot(indices=label-1, depth=9)
-    
-    return {"image_bytes": parsed_features['image/encoded'],
-            "image_decoded": decoded_image,
-            "image_reshaped": reshaped_image,
-            "image_resized": resized_image,
-            "label": label}
-
-  # Use `Dataset.map()` to build a pair of a feature dictionary and a label
-  # tensor for each example.
-  dataset = dataset.map(parse_function)
-  iterator = dataset.make_one_shot_iterator()
-
-  # `features` is a dictionary in which each value is a batch of values for
-  # that feature; `labels` is a batch of labels.
-  features = iterator.get_next()
-  return features
-
 
 def model_fn(features, labels, mode):
   """Model function for CNN."""
