@@ -9,6 +9,7 @@ import numpy as np
 import tensorflow as tf
 import os
 import glob
+from matplotlib import pyplot as plt
 
 
 tfrecords_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/tfrecord_20180507"
@@ -48,23 +49,32 @@ def parse_function(example_proto):
     "image_decoded": decoded_image,
     "image_reshaped": reshaped_image,
     "image_resized": resized_image,
-    "label": label
+    "label": label,
+    "pitcher": parsed_features["pitcher"]
   }
   return parsed_example
 
-dataset = tf.data.TFRecordDataset(train_filenames, num_parallel_reads=8)
+dataset = tf.data.TFRecordDataset(eval_filenames, num_parallel_reads=8)
 parsed_dataset = dataset.map(parse_function)
 iterator = parsed_dataset.make_one_shot_iterator()
 nexelem = iterator.get_next()
 
 sess = tf.InteractiveSession()
 i = 1
+labels = []
 while True:
-    try:
-      print('==============example %s ==============' %i)
-      print(sess.run(nexelem["label"]))
-    except tf.errors.OutOfRangeError:
-      break
-    i += 1
+  try:
+    label, pitcher = sess.run([
+      # tf.cast(nexelem["image_resized"], tf.uint8),
+      nexelem["label"],
+      nexelem["pitcher"]
+  ])
+    labels.append(label)
+  except tf.errors.OutOfRangeError:
+    break
+  else:
+    print('==============example %s ==============' %i)
+    print("label: {}; pitcher: {}".format(label, pitcher))
+  i += 1
 
 

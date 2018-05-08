@@ -109,7 +109,38 @@ def get_eval_data(filedir, height, width, imformat):
     
   return eval_images, eval_labels
 
-def make_input_fn(filenames, num_threads, name, batch_size=64, buffer_size=4096):
+def parser(record):
+  """Use `tf.parse_single_example()` to extract data from a `tf.Example` protocol buffer, 
+and perform any additional per-record preprocessing.
+  """
+  keys_to_features = {
+    "colorspace": tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="RGB"),
+    "channels": tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=3), 
+    "format": tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="PNG"), 
+    "filename": tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+    "encoded_image": tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""), 
+    "label": tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=1),
+    "height": tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=360),
+    "width": tf.FixedLenFeature(shape=(), dtype=tf.int64, default_value=640),
+    "pitcher": tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+    "trial": tf.FixedLenFeature(shape=(), dtype=tf.string, default_value=""),
+    "frame": tf.FixedLenFeature(shape=(), dtype=tf.string, default_value="")
+    }
+  parsed = tf.parse_single_example(record, keys_to_features)
+  # decode the encoded image to the (360, 640, 3) uint8 array
+  decoded_image = tf.image.decode_image((parsed["encoded_image"]))
+  # reshape image
+  reshaped_image = tf.reshape(decoded_image, [360, 640, 3])
+  # resize decoded image
+  resized_image = tf.cast(tf.image.resize_images(reshaped_image, [224, 224]), tf.float32)
+  # label
+  label = tf.cast(parsed["label"], tf.int32)
+    # label = tf.one_hot(indices=label-1, depth=9)
+    
+  return {"raw_image": reshaped_image, "image": resized_image}, label
+
+  
+def make_input_fn(filenames, num_threads, name, buffer_size=4096, batch_size=64, num_epoch=128):
   """Make input function for Estimator API
   
   Args:
@@ -121,4 +152,22 @@ def make_input_fn(filenames, num_threads, name, batch_size=64, buffer_size=4096)
     features:
     labels:
   """
+  # Create Dataset object using TFRecord
   dataset = tf.data.TFRecordDataset(filenames, num_parallel_reads=num_threads)
+  # Parse Dataset object using parse_function
+  dataset = dataset.map(parser)
+  # Generate different Dataset according to its purpose of usage
+  if name == "train":
+    dataset = dataset.shuffle(buffer_size=buffer_size) # shuffle
+    dataset = dataset.batch(batch_size)
+    dataset = dataset.repeat(num_epoch)
+  elif name == "eval":
+    dataset = dataset.repeat(1)
+  else:
+    raise("Dataset usage wrong! Please specify a valid name: train or eval")
+  # Create an iterator
+  iterator = dataset.make_one_shot_iterator()
+  # Get the next batch
+  features, labels = iterator.get_next()
+
+  return features, labels

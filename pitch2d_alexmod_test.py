@@ -180,6 +180,8 @@ def main(unused_argv):
   # Load training and eval data
   train_data, train_labels = data_utils.get_train_data(file_dir, height, width, img_format)
   eval_data, eval_labels = data_utils.get_eval_data(file_dir, height, width, img_format)
+  train_labels = train_labels - 1
+  eval_labels = eval_labels - 1
 
   # Create the Estimator
   run_config = tf.estimator.RunConfig(save_summary_steps=None,
