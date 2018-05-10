@@ -34,6 +34,7 @@ def load_images(imgpaths, h, w, imf='color'):
     img_rsz = cv2.resize(img_raw, (h, w))
     # flatten image tensor to 1-d and save into the image_data array
     image_data[i] = np.resize(img_rsz, (h*w*num_chnls))
+    print("{} of {} images loaded...".format(i+1, len(imgpaths)))
 
   return image_data
 
@@ -75,11 +76,11 @@ def get_train_data(filedir, height, width, imformat):
                                  "train",
                                  "labels")
   train_labels = np.asarray(train_labels_list, dtype=np.int32)
+  train_labels -= 1 # make labels ranging from 0 to 8 (used to be 1 to 9)
 
   # shuffle
   assert len(train_images) == len(train_labels)
-  for _ in range(1000):
-    p = np.random.permutation(len(train_images))
+  p = np.random.permutation(len(train_images))
     
   return train_images[p], train_labels[p]
 
@@ -106,6 +107,7 @@ def get_eval_data(filedir, height, width, imformat):
                                  "validate",
                                  "labels")
   eval_labels = np.asarray(eval_labels_list, dtype=np.int32)
+  eval_labels -= 1 # make labels ranging from 0 to 8
     
   return eval_images, eval_labels
 

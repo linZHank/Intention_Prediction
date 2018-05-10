@@ -1,39 +1,29 @@
-#  Copyright 2016 The TensorFlow Authors. All Rights Reserved.
-#
-#  Licensed under the Apache License, Version 2.0 (the "License");
-#  you may not use this file except in compliance with the License.
-#  You may obtain a copy of the License at
-#
-#   http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software
-#  distributed under the License is distributed on an "AS IS" BASIS,
-#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#  See the License for the specific language governing permissions and
-#  limitations under the License.
-"""Convolutional Neural Network Estimator for MNIST, built with tf.layers."""
+"""Test alexnet with numpy array input"""
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import cv2
 import numpy as np
 import tensorflow as tf
+import data_utils # make sure it is in the same dir
+import os
+import glob
+import time
 
-data_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/dataset_config/travaltes_20180420"
+
+data_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/dataset_config/travaltes_20180415"
 height = 224
 width = 224
-channels = 3
 
 
-def cnn_model_fn(features, labels, mode):
+def model_fn(features, labels, mode):
   """Model function for CNN."""
   # Input Layer
   # Reshape X to 4-D tensor: [batch_size, width, height, channels]
-  # MNIST images are 28x28 pixels, and have one color channel
-  input_layer = features["x"]
-
+  # pitch2d images are 224x224 pixels, and have 3 RGB color channel
+  input_layer = tf.reshape(features["x"], [-1, 224, 224, 3])
+  
   # Convolutional Layer #1
   # Computes 96 features using a 11x11x3 filter with step of 4 plus ReLU activation.
   # Padding is added to preserve width and height.
@@ -63,7 +53,7 @@ def cnn_model_fn(features, labels, mode):
   # Output Tensor Shape: [batch_size, 27, 27, 96]
   pool1 = tf.layers.max_pooling2d(
     inputs=lrn1,
-    pool_size=2,
+    pool_size=3,
     strides=2)
 
   # Convolutional Layer #2
@@ -145,7 +135,10 @@ def cnn_model_fn(features, labels, mode):
   # Flatten tensor into a batch of vectors
   # Input Tensor Shape: [batch_size, 6, 6, 256]
   # Output Tensor Shape: [batch_size, 6 * 6 * 256]
-  pool5_flat = tf.reshape(pool5, [-1, 6*6*256])
+  pool5_shape = pool5.get_shape()
+  num_features = pool5_shape[1:4].num_elements()
+  pool5_flat = tf.reshape(pool5, [-1, num_features])
+  # pool5_flat = tf.reshape(pool5, [-1, 6 * 6 * 256])
 
   # Dense Layer #1
   # Densely connected layer with 4096 neurons
@@ -174,6 +167,7 @@ def cnn_model_fn(features, labels, mode):
 
   predictions = {
       # Generate predictions (for PREDICT and EVAL mode)
+      # "classes": tf.one_hot(indices=tf.argmax(input=logits), depth=9),
       "classes": tf.argmax(input=logits, axis=1),
       # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
       # `logging_hook`.
@@ -184,10 +178,10 @@ def cnn_model_fn(features, labels, mode):
 
   # Calculate Loss (for both TRAIN and EVAL modes)
   loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
-
+  # loss = tf.losses.softmax_cross_entropy(onehot_labels=features["label"], logits=logits)
   # Configure the Training Op (for TRAIN mode)
   if mode == tf.estimator.ModeKeys.TRAIN:
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=1e-9)
+    optimizer = tf.train.AdamOptimizer(learning_rate=1e-5)
     train_op = optimizer.minimize(
         loss=loss,
         global_step=tf.train.get_global_step())
@@ -202,37 +196,12 @@ def cnn_model_fn(features, labels, mode):
 
 
 def main(unused_argv):
-  # Load training data
-  pathfile_train = data_dir+"/train_paths.txt"
-  labelfile_train = data_dir+"/train_labels.txt"
-  # Read in training image file paths and load images accordingly
-  with open(pathfile_train) as pf:
-    imgpaths = pf.readlines()
-  train_data = np.zeros((len(imgpaths), height, width, channels), dtype=np.float32)
-  for i in range(len(imgpaths)):
-    train_data[i] = cv2.resize(cv2.imread(imgpaths[i].split('\n')[0]), (224, 224))
-  # Read in training label file paths and load labels
-  with open(labelfile_train) as lf:
-    train_labels = np.asarray(lf.read().splitlines(), dtype=np.int32)
-
-  # Load evaluation data
-  pathfile_eval = data_dir+"/validate_paths.txt"
-  labelfile_eval = data_dir+"/validate_labels.txt"
-  # Read in evaluation image file paths and load images accordingly
-  with open(pathfile_eval) as pf:
-    imgpaths = pf.readlines()
-  eval_data = np.zeros((len(imgpaths), height, width, channels), dtype=np.float32)
-  for i in range(len(imgpaths)):
-    eval_data[i] = cv2.resize(cv2.imread(imgpaths[i].split('\n')[0]), (224, 224))
-  # Read in evaluation label file paths and load labels
-  with open(labelfile_eval) as lf:
-    eval_labels = np.asarray(lf.read().splitlines(), dtype=np.int32)
-
+  # Load training and eval data
+  train_data, train_labels = data_utils.get_train_data(data_dir, height, width, "color")
+  eval_data, eval_labels = data_utils.get_eval_data(data_dir, height, width, "color")
   # Create the Estimator
-  est_config = tf.estimator.RunConfig(save_summary_steps=None,
-                                    save_checkpoints_secs=None)
-  intent_predictor = tf.estimator.Estimator(
-      model_fn=cnn_model_fn, config=est_config)
+  pitch2d_predictor = tf.estimator.Estimator(
+      model_fn=model_fn, model_dir="/tmp/pitch2d_alexnet_np")
 
   # Set up logging for predictions
   # Log the values in the "Softmax" tensor with label "probabilities"
@@ -244,12 +213,12 @@ def main(unused_argv):
   train_input_fn = tf.estimator.inputs.numpy_input_fn(
       x={"x": train_data},
       y=train_labels,
-      batch_size=32,
-      num_epochs=128,
+      batch_size=64,
+      num_epochs=None,
       shuffle=True)
-  intent_predictor.train(
+  pitch2d_predictor.train(
       input_fn=train_input_fn,
-      steps=None,
+      steps=128,
       hooks=[logging_hook])
 
   # Evaluate the model and print results
@@ -258,9 +227,8 @@ def main(unused_argv):
       y=eval_labels,
       num_epochs=1,
       shuffle=False)
-  eval_results = intent_predictor.evaluate(input_fn=eval_input_fn)
+  eval_results = pitch2d_predictor.evaluate(input_fn=eval_input_fn)
   print(eval_results)
-
 
 if __name__ == "__main__":
   tf.logging.set_verbosity(tf.logging.INFO)
