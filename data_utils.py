@@ -30,8 +30,10 @@ def load_images(imgpaths, h, w, imf='color'):
       img_raw = cv2.imread(imgpaths[i], 0)
     elif imf == 'color':
       img_raw = cv2.imread(imgpaths[i], 1)
+    # crop image to (360, 144, num_channels)
+    img_crp = img_raw[:, int(img_raw.shape[1]/2)-72:int(img_raw.shape[1]/2)+72] 
     # resize image according to h and w
-    img_rsz = cv2.resize(img_raw, (h, w))
+    img_rsz = cv2.resize(img_crp, (h, w))
     # flatten image tensor to 1-d and save into the image_data array
     image_data[i] = np.resize(img_rsz, (h*w*num_chnls))
     print("{} of {} images loaded...".format(i+1, len(imgpaths)))

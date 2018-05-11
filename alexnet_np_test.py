@@ -12,8 +12,8 @@ import glob
 import time
 
 
-# data_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/dataset_config/travaltes_20180415"
-data_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/dataset_config/travaltes_20180420"
+data_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/dataset_config/travaltes_20180415"
+# data_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/dataset_config/travaltes_20180420"
 height = 224
 width = 224
 
@@ -197,6 +197,8 @@ def model_fn(features, labels, mode):
 
 
 def main(unused_argv):
+  # Time start
+  start_time = time.time()
   # Load training and eval data
   train_data, train_labels = data_utils.get_train_data(data_dir, height, width, "color")
   eval_data, eval_labels = data_utils.get_eval_data(data_dir, height, width, "color")
@@ -214,22 +216,26 @@ def main(unused_argv):
   train_input_fn = tf.estimator.inputs.numpy_input_fn(
       x={"x": train_data},
       y=train_labels,
-      batch_size=64,
-      num_epochs=None,
-      shuffle=True)
+      batch_size=128,
+      num_epochs=128,
+      shuffle=True,
+      num_threads=4)
   pitch2d_predictor.train(
       input_fn=train_input_fn,
-      steps=20000,
       hooks=[logging_hook])
 
   # Evaluate the model and print results
   eval_input_fn = tf.estimator.inputs.numpy_input_fn(
       x={"x": eval_data},
       y=eval_labels,
-      num_epochs=1,
+      num_epochs=None,
       shuffle=False)
   eval_results = pitch2d_predictor.evaluate(input_fn=eval_input_fn)
   print(eval_results)
+
+  # End timing
+  end_time = time.time()
+  print("{} seconds elapsed".format(end_time-start_time))
 
 if __name__ == "__main__":
   tf.logging.set_verbosity(tf.logging.INFO)

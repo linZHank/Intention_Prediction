@@ -79,7 +79,7 @@ def train_input_fn():
   return features
 
 def eval_input_fn():
-  dataset = tf.data.TFRecordDataset(eval_filenames, num_parallel_reads=8)
+  dataset = tf.data.TFRecordDataset(eval_filenames)
   def parse_function(example_proto):
     # example_proto, tf_serialized
     keys_to_features = {
