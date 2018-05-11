@@ -12,7 +12,8 @@ import glob
 import time
 
 
-data_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/dataset_config/travaltes_20180415"
+# data_dir = "/media/linzhank/DATA/Works/Intention_Prediction/Dataset/Ball pitch/pit2d9blk/dataset_config/travaltes_20180415"
+data_dir = "/media/linzhank/850EVO_1T/Works/Data/Ball pitch/pit2d9blk/dataset_config/travaltes_20180420"
 height = 224
 width = 224
 
@@ -218,7 +219,7 @@ def main(unused_argv):
       shuffle=True)
   pitch2d_predictor.train(
       input_fn=train_input_fn,
-      steps=128,
+      steps=20000,
       hooks=[logging_hook])
 
   # Evaluate the model and print results
