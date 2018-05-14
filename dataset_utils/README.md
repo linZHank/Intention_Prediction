@@ -8,9 +8,9 @@ Define the pitcher's pose at frame *t1* by joint positions p_t1=(x_1_t, y_1_t, z
   > Since in every pitch, the pitcher starts the trial from static rest state, we set the joint positions in very first frame,
 2. Calculate distance between reference pose and pose at every frame to obtain a curve that describes the pitcher's pose movement againt his initial pose.
 3. Create a window with size of 20 frames.
-4. Sweep the pose distance chaning curve with the window starting at first frame. In current window: 
-&nbsp;&nbsp;- If all distance change was greater than 0.16 and the curve was monotomically increasing, the very first frame of current windown was denoted as the initiation of this pitch trial.
-&nbsp;&nbsp;- If neither the distance change was  greater than 0.16 nor the curve was monotomically increasing, keep sweeping the window until these two conditions both satisfied.
+4. Sweep the pose distance chaning curve with the window starting at first frame. In current window: \
+- &nbsp;&nbsp;If all distance change was greater than 0.16 and the curve was monotomically increasing, the very first frame of current windown was denoted as the initiation of this pitch trial.
+- &nbsp;&nbsp;If neither the distance change was  greater than 0.16 nor the curve was monotomically increasing, keep sweeping the window until these two conditions both satisfied.
 
 In practice, we are able to locate the initiating of the pitch in each trial using this method.
 
