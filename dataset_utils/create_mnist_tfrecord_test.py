@@ -28,37 +28,37 @@ def dict_to_example(img, label):
 # Create tfrecord files for mnist dataset
 mnist = tf.contrib.learn.datasets.load_dataset("mnist")
 dataset_train = mnist.train
-output_path = "~/playground/mnist_tfrecord/train/train"
+output_path = "/home/linzhank/playground/mnist_tfrecord/train/train"
 if not os.path.exists(os.path.dirname(output_path)):
   os.makedirs(os.path.dirname(output_path))  
 num_examples_per_record = 1000
 num_so_far = 0
-writer = tf.python_io.TFRecordWriter("{}{:04d}-{}.tfrecord".format(output_path, num_so_far, num_examples_per_record))
+writer = tf.python_io.TFRecordWriter("{}{:04d}-{}.tfrecord".format(output_path, num_so_far, num_examples_per_record-1))
 for i in np.arange(dataset_train.num_examples):
   example = dict_to_example(dataset_train.images[i], dataset_train.labels[i])
   writer.write(example.SerializeToString())
-  if i % num_examples_per_record and i:
+  if not i % num_examples_per_record and i:
     writer.close()
     num_so_far = i
-    writer = tf.python_io.TFRecordWriter("{}{:04d}-{}.tfrecord".format(output_path, num_so_far, i+num_examples_per_record))
-    print("saved {}{:04d}-{}.tfrecord".format(output_path, num_so_far, i+num_examples_per_record))
+    writer = tf.python_io.TFRecordWriter("{}{:04d}-{}.tfrecord".format(output_path, num_so_far, i+num_examples_per_record-1))
+    print("saved {}{:04d}-{}.tfrecord".format(output_path, num_so_far, i+num_examples_per_record-1))
 writer.close()
 
 dataset_test = mnist.test
-output_path = "~/playground/mnist_tfrecord/test/test"
+output_path = "/home/linzhank/playground/mnist_tfrecord/test/test"
 if not os.path.exists(os.path.dirname(output_path)):
   os.makedirs(os.path.dirname(output_path))  
 num_examples_per_record = 1000
 num_so_far = 0
-writer = tf.python_io.TFRecordWriter("{}{:04d}-{}.tfrecord".format(output_path, num_so_far, num_examples_per_record))
+writer = tf.python_io.TFRecordWriter("{}{:04d}-{}.tfrecord".format(output_path, num_so_far, num_examples_per_record-1))
 for i in np.arange(dataset_test.num_examples):
   example = dict_to_example(dataset_test.images[i], dataset_test.labels[i])
   writer.write(example.SerializeToString())
-  if i % num_examples_per_record and i:
+  if not i % num_examples_per_record and i:
     writer.close()
     num_so_far = i
-    writer = tf.python_io.TFRecordWriter("{}{:04d}-{}.tfrecord".format(output_path, num_so_far, i+num_examples_per_record))
-    print("saved {}{:04d}-{}.tfrecord".format(output_path, num_so_far, i+num_examples_per_record))
+    writer = tf.python_io.TFRecordWriter("{}{:04d}-{}.tfrecord".format(output_path, num_so_far, i+num_examples_per_record-1))
+    print("saved {}{:04d}-{}.tfrecord".format(output_path, num_so_far, i+num_examples_per_record-1))
 writer.close()
 
 
