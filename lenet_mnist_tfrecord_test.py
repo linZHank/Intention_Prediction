@@ -19,6 +19,7 @@ eval_filenames = glob.glob(os.path.join(tfrecords_dir, "test", "test*"))
 def train_input_fn():
   return(data_utils_test.make_input_fn(filenames=train_filenames,
                                   name="train",
+                                  batch_size=1024,
                                   num_epoch=1))
 def eval_input_fn():
   return(data_utils_test.make_input_fn(filenames=eval_filenames,
@@ -29,7 +30,8 @@ def model_fn(features, labels, mode):
   # Input Layer
   # Reshape X to 4-D tensor: [batch_size, width, height, channels]
   # MNIST images are 28x28 pixels, and have one color channel
-  input_layer = tf.reshape(features["image_reshaped"], [-1, 28, 28, 1])
+  input_layer = tf.reshape(features["image_reshaped"], [-1, 28, 28, 1], name="input")
+  labels =  tf.reshape(labels, [-1,1], name="truth")
 
   # Convolutional Layer #1
   # Computes 32 features using a 5x5 filter with ReLU activation.
@@ -88,16 +90,18 @@ def model_fn(features, labels, mode):
   logits = tf.layers.dense(inputs=dropout, units=10)
 
   predictions = {
-      # Generate predictions (for PREDICT and EVAL mode)
-      "classes": tf.argmax(input=logits, axis=1),
-      # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
-      # `logging_hook`.
-      "probabilities": tf.nn.softmax(logits, name="softmax_tensor")
+    # Generate predictions (for PREDICT and EVAL mode)
+    "classes": tf.argmax(input=logits, axis=1, name="pred"),
+    # Add `softmax_tensor` to the graph. It is used for PREDICT and by the
+    # `logging_hook`.
+    "probabilities": tf.nn.softmax(logits, name="softmax_tensor"),
   }
   if mode == tf.estimator.ModeKeys.PREDICT:
     return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
 
   # Calculate Loss (for both TRAIN and EVAL modes)
+  # onehot_labels = tf.one_hot(indices=tf.cast(labels, tf.int32), depth=10)
+  # loss = tf.losses.softmax_cross_entropy(onehot_labels=onehot_labels, logits=logits)
   loss = tf.losses.sparse_softmax_cross_entropy(labels=labels, logits=logits)
 
   # Configure the Training Op (for TRAIN mode)
@@ -127,7 +131,11 @@ def main(unused_argv):
 
   # Set up logging for predictions
   # Log the values in the "Softmax" tensor with label "probabilities"
-  tensors_to_log = {"probabilities": "softmax_tensor"}
+  tensors_to_log = {"probabilities": "softmax_tensor",
+                    "predictions": "pred",
+                    # "inputs": "input",
+                    "labels": "truth"
+                    }
   logging_hook = tf.train.LoggingTensorHook(
       tensors=tensors_to_log, every_n_iter=50)
 

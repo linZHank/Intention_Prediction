@@ -21,6 +21,8 @@ def train_input_fn():
   return(data_utils.make_input_fn(filenames=train_filenames,
                                   num_threads=16,
                                   name="train",
+                                  buffer_size=1024,
+                                  batch_size=64,
                                   num_epoch=1))
 def eval_input_fn():
   return(data_utils.make_input_fn(filenames=eval_filenames,
@@ -33,6 +35,7 @@ def model_fn(features, labels, mode):
   # Reshape X to 4-D tensor: [batch_size, width, height, channels]
   # pitch2d images are 224x224 pixels, and have 3 RGB color channel
   input_layer = tf.reshape(features["image"], [-1, 224, 224, 3])
+  labels = tf.reshape(labels, [-1, 1])
   
   # Convolutional Layer #1
   # Computes 96 features using a 11x11x3 filter with step of 4 plus ReLU activation.
