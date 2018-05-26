@@ -16,23 +16,25 @@ def detect_init(joint_vectors):
   )
   start_id = np.zeros((joint_vectors.shape[0])).astype(int)
   for i in range(joint_matrix.shape[0]):
+    d0 = 0
     inc_inarow = 0
     dist = []
     for j in range(joint_matrix.shape[1]):
       d = np.linalg.norm(joint_matrix[i,j,:] - joint_matrix[i,0,:])
       dist.append(d)
-      if d > 4:
+      if d > 4: # and d > d0:
         inc_inarow += 1
       else:
         inc_inarow = 0
-      if inc_inarow > 32:
-        start_id[i] = j - 32 + 4
+      if inc_inarow > 20:
+        start_id[i] = j - 20 + 4
         # plt.plot(dist)
         # plt.show()
         # in case pitch started too late
         if start_id[i] > 99:
-          start_id[i] = 100
+          start_id[i] = 110
         break
+      d0 = d
 
   return start_id
   
