@@ -5,6 +5,7 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
+import os
 import pandas as pd
 import scipy.io as spio
 import matplotlib.pyplot as plt
@@ -19,18 +20,19 @@ num_k = 16
 
 train_path = "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data/train/joint/"
 test_path = "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data/test/joint/"
+result_path= "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data/result"
 
 # Load data
 train_data = spio.loadmat(train_path + "joint_train.mat")["joint_train"]
 num_examples_train = train_data.shape[0]
-initid_train = utils.detect_init(train_data)
+initid_train = utils.detectInit(train_data)
 train_data = train_data.reshape(num_examples_train,150,75)
 train_classes = spio.loadmat(train_path + "labels_train.mat")["labels_train"]
 train_labels = np.argmax(train_classes, axis=1)
                                 
 test_data = spio.loadmat(test_path + "joint_test.mat")["joint_test"]
 num_examples_test = test_data.shape[0]
-initid_test = utils.detect_init(test_data)
+initid_test = utils.detectInit(test_data)
 test_data = test_data.reshape(num_examples_test,150,75)
 test_classes = spio.loadmat(test_path + "labels_test.mat")["labels_test"]
 test_labels = np.argmax(test_classes, axis=1)
@@ -47,20 +49,25 @@ high_score_test = np.zeros(best_k.shape)
 pred_even = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 pred_disc = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 pred_logr = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
+# Init prediction accuracy storage
+acc_even = np.zeros(best_k.shape)
+acc_disc = np.zeros(best_k.shape)
+acc_logr = np.zeros(best_k.shape)
+
 for i,nf in enumerate(num_frames):
-  Xtr, ytr = utils.prepjointdata(
+  Xtr, ytr = utils.prepJointData(
     train_data,
     train_labels,
     initid_train,
     nf,
     shuffle=True)
-  Xte, yte = utils.prepjointdata(
+  Xte, yte = utils.prepJointData(
     test_data,
     test_labels,
     initid_test,
     nf)
   # Build KNN classifier and make prediction
-  num_k = 2
+  num_k = 16
   score_train = np.zeros(num_k)
   score_test = np.zeros(num_k)
   knn = []
@@ -75,18 +82,43 @@ for i,nf in enumerate(num_frames):
   best_k[i] = max_index + 1
   high_score_train[i] = score_train[max_index]
   high_score_test[i] = score_test[max_index]
-  # Predict trials with knn-vote
+  # Predictions on all frames
   classes_test = knn[max_index].predict(Xte)
+  # Vote prediction for trials, even weight
   pred_even[i] = utils.vote(classes_test, nf, vote_opt="even")
+  assert pred_even[i].shape == test_labels.shape
+  # Calculate even prediction accuracy
+  acc_even[i] = np.sum(pred_even[i]==test_labels, dtype=np.float32)/num_examples_test
+  # Vote prediction for trials, discount weight
   pred_disc[i] = utils.vote(classes_test, nf, vote_opt="disc")
+  # Calculate discounted prediction accuracy
+  acc_disc[i] = np.sum(pred_disc[i]==test_labels, dtype=np.float32)/num_examples_test
+  # Vote prediction for trials, logarithmic weight  
   pred_logr[i] = utils.vote(classes_test, nf, vote_opt="logr")
+  # Calculate logarithm prediction accuracy
+  acc_even[i] = np.sum(pred_logr[i]==test_labels)/num_examples_test
 
+# Save frame-wise and trial-wise accuracies in pandas DataFrmae
 df = pd.DataFrame({
-  "num_frames": num_frames,
-  "best_k": best_k,
-  "high_score_train": high_score_train,
-  "high_score_test": high_score_test
-  #"pred_even":pred_even
+  "frames": num_frames,
+  "neighbors": best_k,
+  "score_train": high_score_train,
+  "score_test": high_score_test,
+  "accuracy_even": acc_even,
+  "accuracy_disc": acc_disc,
+  "accuracy_logr": acc_even
   })
+dffilename = os.path.join(result_path, "knn_joint.csv")
+if not os.path.exists(os.path.dirname(dffilename)):
+  os.makedirs(os.path.dirname(dffilename))
+df.to_csv(dffilename)
     
-    
+# Plot confusion matrix
+# target_names = ["intent"]*9
+# for i in range(9):
+#   target_names[i] += str(i+1)
+# cnf_matrix = confusion_matrix(test_labels, pred_disc[-1])
+# utils.plotConfusionMatrix(cnf_matrix, target_names)
+
+# Plot trates accuracies
+utils.plotAccBar(high_score_train, high_score_test, num_frames)

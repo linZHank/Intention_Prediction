@@ -4,10 +4,11 @@ from __future__ import print_function
 
 import numpy as np
 import matplotlib.pyplot as plt
+import itertools
 
 num_frames = 150
 
-def detect_init(joint_vectors):
+def detectInit(joint_vectors):
   # reshape(num_examples, 11250) to (num_examples, 150, 75)
   joint_matrix = joint_vectors.reshape(
     joint_vectors.shape[0], # trial
@@ -69,7 +70,7 @@ def vote(classes, num_frames, vote_opt="even"):
 
   return prediction
 
-def prepjointdata(raw_data, raw_labels, init_id, num_frames, shuffle=False):
+def prepJointData(raw_data, raw_labels, init_id, num_frames, shuffle=False):
   """Prepare joint data for training and testing
 
      Args:
@@ -100,5 +101,67 @@ def prepjointdata(raw_data, raw_labels, init_id, num_frames, shuffle=False):
 
   return X, y
 
+def plotConfusionMatrix(cm, classes, normalize=False, cmap=plt.cm.YlOrBr):
+  """
+    This function prints and plots the confusion matrix.
+    Normalization can be applied by setting `normalize=True`.
 
+    Args:
+      cm: confution matrix
+      classes: class names
+      normalize:
+      cmap: color map
+  """
+  # Print out confusion matrix
+  if normalize:
+    cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+    print("Normalized confusion matrix")
+  else:
+    print('Confusion matrix, without normalization')
+  print(cm)
+  # 
+  plt.imshow(cm, interpolation='nearest', cmap=cmap)
+  # plt.title(title)
+  plt.colorbar(ticks = np.linspace(0,4,5))
+  plt.clim(0,4)
+  tick_marks = np.arange(len(classes))
+  plt.xticks(tick_marks, classes, rotation=45)
+  plt.yticks(tick_marks, classes)
+  #
+  fmt = '.2f' if normalize else 'd'
+  thresh = cm.max() / 2.
+  for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+    plt.text(j, i, format(cm[i, j], fmt),
+             horizontalalignment="center",
+             color="white" if cm[i, j] > thresh else "black")
+  plt.tight_layout()
+  plt.ylabel('True label')
+  plt.xlabel('Predicted label')
 
+  plt.show()
+
+def plotAccBar(train_acc, test_acc, num_frames):
+  """Plot bar chart for training and testing accuracies
+  """
+  fig, ax = plt.subplots()
+  #x_ticks = tuple([str(i) for i in num_frames])
+  #y_ticks = tuple([str(j) for j in np.arange(0, 1, 0.1)])
+  x_pos = np.arange(num_frames.shape[0])
+  y_pos = np.linspace(0, 1, num=11, dtype=np.float16)
+  x_ticks = num_frames.astype(str)
+  y_ticks = y_pos.astype('|S4')
+  
+  bar_width = 0.35
+  # Plot bars
+  rects1 = plt.bar(x_pos, train_acc, bar_width, color = 'k', label = 'Train accuracy')
+  rects2 = plt.bar(x_pos + bar_width, test_acc, bar_width, color = '#ff9b1a', label = 'Test accuracy')
+  plt.xlabel('Frames')
+  plt.ylabel('Accuracy')
+  plt.xlim(0, 7+2*bar_width)
+  plt.ylim(0, 1.01)
+  plt.xticks(x_pos+bar_width, x_ticks)
+  plt.yticks(y_pos, y_ticks)
+  ax.legend(loc=9, bbox_to_anchor=(0.5, 1.1),
+          ncol=2, fancybox=True, shadow=True) # upper center
+
+  plt.show()
