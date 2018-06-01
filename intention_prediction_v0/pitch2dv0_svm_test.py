@@ -1,4 +1,4 @@
-"""Test knn on pitch2dv0"""
+"""Test svm on pitch2dv0"""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -37,24 +37,24 @@ test_data = test_data.reshape(num_examples_test,150,75)
 test_classes = spio.loadmat(test_path + "labels_test.mat")["labels_test"]
 test_labels = np.argmax(test_classes, axis=1)
 
-# Use 5, 10, 15,...,40 frames of data to train 8 knn predictor
+# Use 5, 10, 15,...,40 frames of data to train 8 svm predictor
 num_frames = 5*np.arange(1,9)
 # Init best kernel storage 
 best_kernel = np.array([""]*num_frames.shape[0], dtype="|S8")
-# Init best predictor storage
+# Init best kernel storage 
 best_predictor = []
 # Init highest train score storage
-high_score_train = np.zeros(best_k.shape)
+high_score_train = np.zeros(best_kernel.shape)
 # Init highest test score storage
-high_score_test = np.zeros(best_k.shape)
-# Init knn-vote prediction storage
+high_score_test = np.zeros(best_kernel.shape)
+# Init svm-vote prediction storage
 pred_even = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 pred_disc = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 pred_logr = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 # Init prediction accuracy storage
-acc_even = np.zeros()
-acc_disc = np.zeros()
-acc_logr = np.zeros()
+acc_even = np.zeros(best_kernel.shape)
+acc_disc = np.zeros(best_kernel.shape)
+acc_logr = np.zeros(best_kernel.shape)
 
 for i,nf in enumerate(num_frames):
   Xtr, ytr = utils.prepJointData(
@@ -82,11 +82,11 @@ for i,nf in enumerate(num_frames):
     
   ind_max = np.argmax(score_test)
   best_kernel[i] = kernel[ind_max]
-  best_predictor.append(knn[ind_max])
-  high_score_train[i] = score_train[max_index]
-  high_score_test[i] = score_test[max_index]
+  best_predictor.append(svm[ind_max])
+  high_score_train[i] = score_train[ind_max]
+  high_score_test[i] = score_test[ind_max]
   # Predictions on all frames
-  classes_test = knn[max_index].predict(Xte)
+  classes_test = svm[ind_max].predict(Xte)
   # Vote prediction for trials, even weight
   pred_even[i] = utils.vote(classes_test, nf, vote_opt="even")
   assert pred_even[i].shape == test_labels.shape
@@ -116,14 +116,14 @@ else:
 # Save frame-wise and trial-wise accuracies in pandas DataFrmae
 df = pd.DataFrame({
   "frames": num_frames,
-  "neighbors": best_k,
+  "neighbors": best_kernel,
   "score_train": high_score_train,
   "score_test": high_score_test,
   "accuracy_even": acc_even,
   "accuracy_disc": acc_disc,
   "accuracy_logr": acc_even
   })
-dffilename = os.path.join(result_path, "knn_joint.csv")
+dffilename = os.path.join(result_path, "svm_joint.csv")
 if not os.path.exists(os.path.dirname(dffilename)):
   os.makedirs(os.path.dirname(dffilename))
 df.to_csv(dffilename)
@@ -140,17 +140,17 @@ utils.plotAccBar(high_score_train, high_score_test, num_frames)
 
 # Save predictions to files
 # Save even weighted predictions
-predevenfilename = os.path.join(result_path, "knn_joint_even.txt")
+predevenfilename = os.path.join(result_path, "svm_joint_even.txt")
 if not os.path.exists(os.path.dirname(predevenfilename)):
   os.makedirs(os.path.dirname(predevenfilename))
 np.savetxt(predevenfilename, pred_even, fmt="%d")
 # Save discont weighted predictions
-preddiscfilename = os.path.join(result_path, "knn_joint_disc.txt")
+preddiscfilename = os.path.join(result_path, "svm_joint_disc.txt")
 if not os.path.exists(os.path.dirname(preddiscfilename)):
   os.makedirs(os.path.dirname(preddiscfilename))
 np.savetxt(preddiscfilename, pred_disc, fmt="%d")
 # Save logarithm weighted predictions
-predlogrfilename = os.path.join(result_path, "knn_joint_logr.txt")
+predlogrfilename = os.path.join(result_path, "svm_joint_logr.txt")
 if not os.path.exists(os.path.dirname(predlogrfilename)):
   os.makedirs(os.path.dirname(predlogrfilename))
 np.savetxt(predlogrfilename, pred_logr, fmt="%d")
