@@ -10,7 +10,7 @@ import pandas as pd
 import scipy.io as spio
 import matplotlib.pyplot as plt
 import time
-from sklearn import neighbors
+from sklearn.svm import SVC
 from sklearn.metrics import confusion_matrix
 
 import utils
@@ -39,8 +39,8 @@ test_labels = np.argmax(test_classes, axis=1)
 
 # Use 5, 10, 15,...,40 frames of data to train 8 knn predictor
 num_frames = 5*np.arange(1,9)
-# Init best k storage 
-best_k = np.zeros(num_frames.shape).astype(int)
+# Init best kernel storage 
+best_kernel = np.array([""]*num_frames.shape[0], dtype="|S8")
 # Init best predictor storage
 best_predictor = []
 # Init highest train score storage
@@ -52,9 +52,9 @@ pred_even = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 pred_disc = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 pred_logr = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 # Init prediction accuracy storage
-acc_even = np.zeros(best_k.shape)
-acc_disc = np.zeros(best_k.shape)
-acc_logr = np.zeros(best_k.shape)
+acc_even = np.zeros()
+acc_disc = np.zeros()
+acc_logr = np.zeros()
 
 for i,nf in enumerate(num_frames):
   Xtr, ytr = utils.prepJointData(
@@ -68,21 +68,21 @@ for i,nf in enumerate(num_frames):
     test_labels,
     initid_test,
     nf)
-  # Build KNN classifier and make prediction
-  num_k = 16
-  score_train = np.zeros(num_k)
-  score_test = np.zeros(num_k)
-  knn = []
-  for k in range(num_k):
-    knn.append(neighbors.KNeighborsClassifier(k+1))
-    score_train[k] = knn[k].fit(Xtr, ytr).score(Xtr, ytr)
-    score_test[k] = knn[k].fit(Xtr, ytr).score(Xte, yte)
-    print("{} frames, training accuracy: {} @ k={}".format(nf, score_train[k], k+1))
-    print("{} frames, testing accuracy: {} @ k={}".format(nf, score_test[k], k+1))
+  # Build SVM classifier and make prediction
+  kernel = ["linear", "poly", "rbf", "sigmoid"]
+  score_train = np.zeros(len(kernel))
+  score_test = np.zeros(len(kernel))
+  svm = []
+  for k in range(len(kernel)):
+    svm.append(SVC(kernel=kernel[k]))
+    score_train[k] = svm[k].fit(Xtr, ytr).score(Xtr, ytr)
+    score_test[k] = svm[k].fit(Xtr, ytr).score(Xte, yte)
+    print("{} frames, training accuracy: {} @ {} kernel".format(nf, score_train[k], kernel[k]))
+    print("{} frames, testing accuracy: {} @ {} kernel".format(nf, score_test[k], kernel[k]))
     
-  max_index = np.argmax(score_test)
-  best_k[i] = max_index + 1
-  best_predictor.append(knn[max_index])
+  ind_max = np.argmax(score_test)
+  best_kernel[i] = kernel[ind_max]
+  best_predictor.append(knn[ind_max])
   high_score_train[i] = score_train[max_index]
   high_score_test[i] = score_test[max_index]
   # Predictions on all frames

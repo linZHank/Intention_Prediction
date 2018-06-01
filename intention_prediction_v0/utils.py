@@ -119,7 +119,8 @@ def plotConfusionMatrix(cm, classes, normalize=False, cmap=plt.cm.YlOrBr):
   else:
     print('Confusion matrix, without normalization')
   print(cm)
-  # 
+  #
+  # plt.figure(figsize=(6,5.5))
   plt.imshow(cm, interpolation='nearest', cmap=cmap)
   # plt.title(title)
   plt.colorbar(ticks = np.linspace(0,4,5))
