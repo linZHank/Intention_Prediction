@@ -16,7 +16,7 @@ from sklearn.metrics import confusion_matrix
 import utils
 
 num_classes = 9
-num_k = 16
+num_kernels = 4
 
 train_path = "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data/train/joint/"
 test_path = "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data/test/joint/"
