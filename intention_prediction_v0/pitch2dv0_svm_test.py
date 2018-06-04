@@ -99,7 +99,7 @@ for i,nf in enumerate(num_frames):
   # Vote prediction for trials, logarithmic weight  
   pred_logr[i] = utils.vote(classes_test, nf, vote_opt="logr")
   # Calculate logarithm prediction accuracy
-  acc_even[i] = np.sum(pred_logr[i]==test_labels)/num_examples_test
+  acc_logr[i] = np.sum(pred_logr[i]==test_labels)/num_examples_test
 
 # Find best predictor
 pred_accs = np.array([acc_even, acc_disc, acc_logr])
