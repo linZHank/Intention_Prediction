@@ -12,3 +12,4 @@ import tensorflow as tf
 import utils
 
 img_te, lbl_te = utils.loadImages("test")
+

@@ -2,12 +2,45 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import cv2
 import numpy as np
+import os
+import glob
 import matplotlib.pyplot as plt
 import itertools
 
 num_frames = 150
 
+def loadImages(name, imformat=1):
+  """Load images as numpy array
+  
+  Args:
+    name: "train" or "test"
+    imformat: 1 for color, 0 for grayscale, -1 for including alpha channel
+  Returns:
+    images: array of all loaded images, (num_examples, width x height x channels)
+    labels: array of labels corresponding to images
+  """
+  images = []
+  labels = []
+  data_path = "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data"
+  target_paths = sorted(glob.glob(os.path.join(data_path, name, "color", "*")))
+  for tarp in target_paths:
+    print("Loading {} images from {}".format(name, tarp.split("/")[-1]))
+    trial_paths = sorted(glob.glob(os.path.join(tarp, "*")))
+    for trip in trial_paths:
+      image_paths = sorted(glob.glob(os.path.join(trip, "*.png")))
+      for imgp in image_paths:
+        img = cv2.imread(imgp, imformat).reshape(-1) # read image and reshape to a 1-d array
+        images.append(img)
+        label = int(tarp.split("/")[-1][-1])
+        labels.append(label)
+  # convert to numpy array
+  images = np.array(images)
+  labels = np.array(labels)
+
+  return images, labels
+  
 def detectInit(joint_vectors):
   # reshape(num_examples, 11250) to (num_examples, 150, 75)
   joint_matrix = joint_vectors.reshape(
@@ -74,7 +107,6 @@ def prepJointData(raw_data, raw_labels, init_id, num_frames, shuffle=False):
   """Prepare joint data for training and testing
 
      Args:
-       example_id: int scalar, example index to specify the trial
        raw_data: float array, original data in shape (num_examples, frames, num_joints*num_coords)
        raw_labels: int array, (num_examples,)
        init_id: int scalar, frame index mark the start of the pitch

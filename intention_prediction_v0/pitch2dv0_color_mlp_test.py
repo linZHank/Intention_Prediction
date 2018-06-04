@@ -41,8 +41,6 @@ test_labels = np.argmax(test_classes, axis=1)
 num_frames = 5*np.arange(1,9)
 # Init best kernel storage 
 best_layers = np.zeros((8,2), dtype=int)
-# Init best kernel storage 
-best_predictor = []
 # Init highest train score storage
 high_score_train = np.zeros(num_frames.shape[0])
 # Init highest test score storage
