@@ -11,7 +11,7 @@ import itertools
 
 num_frames = 150
 
-def loadImages(name, imformat=1):
+def loadImages(name, imformat=1, scale=1):
   """Load images as numpy array
   
   Args:
@@ -21,25 +21,32 @@ def loadImages(name, imformat=1):
     images: array of all loaded images, (num_examples, width x height x channels)
     labels: array of labels corresponding to images
   """
+  assert 0 <= scale <= 1
   images = []
   labels = []
+  classes = []
   data_path = "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data"
   target_paths = sorted(glob.glob(os.path.join(data_path, name, "color", "*")))
   for tarp in target_paths:
     print("Loading {} images from {}".format(name, tarp.split("/")[-1]))
     trial_paths = sorted(glob.glob(os.path.join(tarp, "*")))
     for trip in trial_paths:
-      image_paths = sorted(glob.glob(os.path.join(trip, "*.png")))
+      # extract from 5th to 45th frames in a trial
+      image_paths = sorted(glob.glob(os.path.join(trip, "*.png")))[5:45]
+      label = int(tarp.split("/")[-1][-1])-1
+      labels.append(label)
       for imgp in image_paths:
-        img = cv2.imread(imgp, imformat).reshape(-1) # read image and reshape to a 1-d array
+        img = cv2.imread(imgp, imformat)
+        img = cv2.resize(img, (0,0), fx=scale, fy=scale).reshape(-1) # resize and reshape image to a 1-d array
         images.append(img)
-        label = int(tarp.split("/")[-1][-1])
-        labels.append(label)
+        cls = label
+        classes.append(cls)
   # convert to numpy array
   images = np.array(images)
   labels = np.array(labels)
+  classes = np.array(classes)
 
-  return images, labels
+  return images, labels, classes
   
 def detectInit(joint_vectors):
   # reshape(num_examples, 11250) to (num_examples, 150, 75)
@@ -132,6 +139,35 @@ def prepJointData(raw_data, raw_labels, init_id, num_frames, shuffle=False):
     y = y[p]
 
   return X, y
+
+def prepImageData(img_arrays, img_labels, num_frames, shuffle=False):
+  """Preprocessing image data for training and testing
+     
+  Args:
+    img_data: all image data, np array: (num_trials*40, width*height*channels)
+    img_labels: all images' labels, np array: (num_examples,)
+    num_frames: number of frames to be kept for generating new dataset, int
+    shuffle: whether shuffle the new dataset and corresponding labels, boolean
+  Returns:
+    X: new dataset, np array: (num_datapoints, width*height*channels)
+    y: labels corresponding to X, np array: (num_datapoints,)
+  """
+  assert not img_arrays.shape[0] % 40 # make sure img_arrays in good shape
+  assert img_arrays.shape[0] == img_labels.shape[0] # make sure the number of instance in image data and labels are the same
+  num_trials = int(img_arrays.shape[0] / 40)
+  ind_del = [] # index of examples to be deleted
+  for tr in range(num_trials):
+    idel = range(40*tr+num_frames, 40*(tr+1))
+    ind_del += idel
+  X = np.delete(img_arrays, ind_del, axis=0) 
+  y = np.delete(img_labels, ind_del, axis=0)
+  if shuffle:
+    p = np.random.permutation(X.shape[0]) # generate shuffled index
+    X = X[p]
+    y = y[p]
+
+  return X, y
+
 
 def plotConfusionMatrix(cm, classes, normalize=False, cmap=plt.cm.YlOrBr):
   """

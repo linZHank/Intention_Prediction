@@ -1,10 +1,8 @@
-"""Test multilayer perceptrons on pitch2dv0 color image data"""
+"""Test svm on pitch2dv0 color image data"""
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
-import tensorflow as tf
 
 import numpy as np
 import os
@@ -12,12 +10,17 @@ import pandas as pd
 import scipy.io as spio
 import matplotlib.pyplot as plt
 import time
+from sklearn.svm import SVC
 from sklearn.metrics import confusion_matrix
 
 import utils
 
+num_classes = 9
+num_kernels = 4
+
 result_path= "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data/result"
 
+# Time on
 start_t = time.time()
 # Load data
 train_data, train_labels, train_classes = utils.loadImages(
@@ -26,7 +29,6 @@ train_data, train_labels, train_classes = utils.loadImages(
   scale=0.25
 )
 num_examples_train = train_labels.shape[0]
-
 test_data, test_labels, test_classes = utils.loadImages(
   name="test",
   imformat=0,
@@ -37,19 +39,21 @@ num_examples_test = test_labels.shape[0]
 # Use 5, 10, 15,...,40 frames of data to train 8 svm predictor
 num_frames = 5*np.arange(1,9)
 # Init best kernel storage 
-best_layers = np.zeros((8,2), dtype=int)
+best_kernel = np.array([""]*num_frames.shape[0], dtype="|S8")
+# Init best kernel storage 
+best_predictor = []
 # Init highest train score storage
-high_score_train = np.zeros(num_frames.shape[0])
+high_score_train = np.zeros(best_kernel.shape)
 # Init highest test score storage
-high_score_test = np.zeros(num_frames.shape[0])
+high_score_test = np.zeros(best_kernel.shape)
 # Init svm-vote prediction storage
 pred_even = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 pred_disc = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 pred_logr = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 # Init prediction accuracy storage
-acc_even = np.zeros(num_frames.shape[0])
-acc_disc = np.zeros(num_frames.shape[0])
-acc_logr = np.zeros(num_frames.shape[0])
+acc_even = np.zeros(best_kernel.shape)
+acc_disc = np.zeros(best_kernel.shape)
+acc_logr = np.zeros(best_kernel.shape)
 
 for i,nf in enumerate(num_frames):
   Xtr, ytr = utils.prepImageData(
@@ -61,97 +65,40 @@ for i,nf in enumerate(num_frames):
     test_data,
     test_classes,
     nf)
-  # Build MLP classifier and make prediction
-  layer1 = np.array([128, 256, 512, 1024])
-  layer2 = np.array([128, 256, 512, 1024])
-  score_train =  np.zeros(layer1.shape[0]*layer2.shape[0])
-  score_test = np.zeros(layer1.shape[0]*layer2.shape[0])
-  train_input_fn = tf.estimator.inputs.numpy_input_fn(
-    x={"x": Xtr},
-    y=ytr,
-    batch_size=64,
-    num_epochs=None,
-    shuffle=True
-  )
-  test_input_fn = tf.estimator.inputs.numpy_input_fn(
-    x={"x": Xte},
-    y=yte,
-    num_epochs=1,
-    shuffle=False
-  )
-  ct = 0 # counter
-  for l1 in layer1:
-    for l2 in layer2:
-      feat_cols = [
-        tf.feature_column.numeric_column(
-          key="x",
-          shape=[Xtr.shape[1]]
-        )
-      ]
-      hid_units = [l1, l2]
-      classifier = tf.estimator.DNNClassifier(
-        feature_columns = feat_cols,
-        hidden_units=hid_units,
-        optimizer=tf.train.AdamOptimizer(1e-3),
-        n_classes=9,
-        model_dir="/tmp/pitch2dv0_color_mlp_frame{}_{}-{}".format(nf, l1, l2)
-      )   
-      classifier.train(
-        input_fn=train_input_fn,
-        steps=20000
-      )
-      score_train[ct] = classifier.evaluate(
-        input_fn=tf.estimator.inputs.numpy_input_fn(
-        x={"x": Xtr},
-        y=ytr,
-        num_epochs=1,
-        shuffle=False
-        )
-      )["accuracy"]
-      score_test[ct] = classifier.evaluate(input_fn=test_input_fn)["accuracy"]
-      print("{} frames, training accuracy: {} @ layer1: {} / layer2: {}".format(nf, score_train[ct], l1, l2 ))
-      print("{} frames, testing accuracy: {} @ layer1: {} / layer2: {}".format(nf, score_test[ct], l1, l2))
-      ct += 1
-  # Find best l1, l2 combination for current frames setting
+  # Build SVM classifier and make prediction
+  kernel = ["linear", "poly", "rbf", "sigmoid"]
+  score_train = np.zeros(len(kernel))
+  score_test = np.zeros(len(kernel))
+  svm = []
+  for k in range(len(kernel)):
+    svm.append(SVC(kernel=kernel[k]))
+    score_train[k] = svm[k].fit(Xtr, ytr).score(Xtr, ytr)
+    score_test[k] = svm[k].fit(Xtr, ytr).score(Xte, yte)
+    print("{} frames, training accuracy: {} @ {} kernel".format(nf, score_train[k], kernel[k]))
+    print("{} frames, testing accuracy: {} @ {} kernel".format(nf, score_test[k], kernel[k]))
+    
   ind_max = np.argmax(score_test)
-  best_layers[i] = np.array([layer1[int(ind_max/layer2.shape[0])], layer2[int(ind_max%layer2.shape[0])]])
+  best_kernel[i] = kernel[ind_max]
+  best_predictor.append(svm[ind_max])
   high_score_train[i] = score_train[ind_max]
   high_score_test[i] = score_test[ind_max]
   # Predictions on all frames
-  best_classifier = tf.estimator.DNNClassifier(
-    feature_columns = feat_cols,
-    hidden_units=best_layers[i],
-    n_classes=9,
-    model_dir="/tmp/pitch2dv0_color_mlp_frame{}_{}-{}".format(nf, best_layers[i][0], best_layers[i][1])
-  )
-  indte = range(Xte.shape[0])
-  predictions = best_classifier.predict(input_fn=test_input_fn)
-  clste = np.zeros(yte.shape).astype(int)
-  correct_sum = 0
-  for pred, ind in zip(predictions, indte):
-    clste[ind] = pred["class_ids"][0]
-    probability = pred["probabilities"][clste[ind]]
-    print("Prediction is {} {:.1f}%, expected {}".format(clste[ind], 100*probability, yte[ind]))
-    if clste[ind] == yte[ind]:
-      correct_sum += 1
-  acc_te = float(correct_sum / len(indte))
-  assert abs(acc_te-high_score_test[i])<1e-4
-
+  classes_test = best_predictor[i].predict(Xte)
   # Vote prediction for trials, even weight
-  pred_even[i] = utils.vote(clste, nf, vote_opt="even")
+  pred_even[i] = utils.vote(classes_test, nf, vote_opt="even")
   assert pred_even[i].shape == test_labels.shape
   # Calculate even prediction accuracy
   acc_even[i] = np.sum(pred_even[i]==test_labels, dtype=np.float32)/num_examples_test
   # Vote prediction for trials, discount weight
-  pred_disc[i] = utils.vote(clste, nf, vote_opt="disc")
+  pred_disc[i] = utils.vote(classes_test, nf, vote_opt="disc")
   # Calculate discounted prediction accuracy
   acc_disc[i] = np.sum(pred_disc[i]==test_labels, dtype=np.float32)/num_examples_test
   # Vote prediction for trials, logarithmic weight  
-  pred_logr[i] = utils.vote(clste, nf, vote_opt="logr")
+  pred_logr[i] = utils.vote(classes_test, nf, vote_opt="logr")
   # Calculate logarithm prediction accuracy
   acc_logr[i] = np.sum(pred_logr[i]==test_labels)/num_examples_test
 
-# Find best prediction
+# Find best predictor
 pred_accs = np.array([acc_even, acc_disc, acc_logr])
 ind = np.unravel_index(np.argmax(pred_accs, axis=None), pred_accs.shape)
 assert len(ind) == 2
@@ -166,15 +113,14 @@ else:
 # Save frame-wise and trial-wise accuracies in pandas DataFrmae
 df = pd.DataFrame({
   "frames": num_frames,
-  "layer1": best_layers[:,0],
-  "layer2": best_layers[:,1],
+  "neighbors": best_kernel,
   "score_train": high_score_train,
   "score_test": high_score_test,
   "accuracy_even": acc_even,
   "accuracy_disc": acc_disc,
   "accuracy_logr": acc_even
   })
-dffilename = os.path.join(result_path, "color_mlp_scores.csv")
+dffilename = os.path.join(result_path, "color_svm_scores.csv")
 if not os.path.exists(os.path.dirname(dffilename)):
   os.makedirs(os.path.dirname(dffilename))
 df.to_csv(dffilename)
@@ -191,21 +137,19 @@ utils.plotAccBar(high_score_train, high_score_test, num_frames)
 
 # Save predictions to files
 # Save even weighted predictions
-predevenfilename = os.path.join(result_path, "color_mlp_pred_even.txt")
+predevenfilename = os.path.join(result_path, "color_svm_pred_even.txt")
 if not os.path.exists(os.path.dirname(predevenfilename)):
   os.makedirs(os.path.dirname(predevenfilename))
 np.savetxt(predevenfilename, pred_even, fmt="%d")
 # Save discont weighted predictions
-preddiscfilename = os.path.join(result_path, "color_mlp_pred_disc.txt")
+preddiscfilename = os.path.join(result_path, "color_svm_pred_disc.txt")
 if not os.path.exists(os.path.dirname(preddiscfilename)):
   os.makedirs(os.path.dirname(preddiscfilename))
 np.savetxt(preddiscfilename, pred_disc, fmt="%d")
 # Save logarithm weighted predictions
-predlogrfilename = os.path.join(result_path, "color_mlp_pred_logr.txt")
+predlogrfilename = os.path.join(result_path, "color_svm_pred_logr.txt")
 if not os.path.exists(os.path.dirname(predlogrfilename)):
   os.makedirs(os.path.dirname(predlogrfilename))
 np.savetxt(predlogrfilename, pred_logr, fmt="%d")
 
-# Times up
-end_t = time.time()
-print("Total running time: {:g} seconds".format(end_t - start_t))
+
