@@ -144,7 +144,7 @@ def prepJointData(raw_data, raw_labels, init_id, num_frames, std_scale=True, shu
 
   return X, y
 
-def prepImageData(img_arrays, img_labels, num_frames, std_scale=True, shuffle=False):
+def prepImageData(img_arrays, img_labels, num_frames, std=True, shuffle=False):
   """Preprocessing image data for training and testing
      
   Args:
@@ -165,7 +165,7 @@ def prepImageData(img_arrays, img_labels, num_frames, std_scale=True, shuffle=Fa
     ind_del += idel
   X = np.delete(img_arrays, ind_del, axis=0) 
   y = np.delete(img_labels, ind_del, axis=0)
-  if std_scale:
+  if std:
     scaler = StandardScaler()
     X = scaler.fit_transform(X)
   if shuffle:

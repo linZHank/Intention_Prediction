@@ -52,9 +52,9 @@ pred_even = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 pred_disc = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 pred_logr = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 # Init prediction accuracy storage
-acc_even = np.zeros(best_kernel.shape)
-acc_disc = np.zeros(best_kernel.shape)
-acc_logr = np.zeros(best_kernel.shape)
+acc_even = np.zeros(num_frames.shape)
+acc_disc = np.zeros(num_frames.shape)
+acc_logr = np.zeros(num_frames.shape)
 # Init time consumption storage
 time_elapsed = np.zeros(best_kernel.shape)
 
