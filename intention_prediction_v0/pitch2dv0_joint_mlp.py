@@ -1,4 +1,4 @@
-"""Test multilayer perceptrons on pitch2dv0 color image data"""
+"""Use Multilayer Perceptron on pitch2dv0 joint data"""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -12,27 +12,32 @@ import pandas as pd
 import scipy.io as spio
 import matplotlib.pyplot as plt
 import time
+from datetime import datetime
 from sklearn.metrics import confusion_matrix
 
 import utils
 
-result_path= "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data/result"
+num_classes = 9
 
-start_t = time.time()
+train_path = "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data/train/joint/"
+test_path = "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data/test/joint/"
+TODAY = datetime.today().strftime("%Y%m%d")
+result_path= "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data/result{}".format(TODAY)
+
 # Load data
-train_data, train_labels, train_classes = utils.loadImages(
-  name="train",
-  imformat=0,
-  scale=0.25
-)
-num_examples_train = train_labels.shape[0]
-
-test_data, test_labels, test_classes = utils.loadImages(
-  name="test",
-  imformat=0,
-  scale=0.25
-)
-num_examples_test = test_labels.shape[0]
+train_data = spio.loadmat(train_path + "joint_train.mat")["joint_train"]
+num_examples_train = train_data.shape[0]
+initid_train = utils.detectInit(train_data)
+train_data = train_data.reshape(num_examples_train,150,75)
+train_classes = spio.loadmat(train_path + "labels_train.mat")["labels_train"]
+train_labels = np.argmax(train_classes, axis=1)
+                                
+test_data = spio.loadmat(test_path + "joint_test.mat")["joint_test"]
+num_examples_test = test_data.shape[0]
+initid_test = utils.detectInit(test_data)
+test_data = test_data.reshape(num_examples_test,150,75)
+test_classes = spio.loadmat(test_path + "labels_test.mat")["labels_test"]
+test_labels = np.argmax(test_classes, axis=1)
 
 # Use 5, 10, 15,...,40 frames of data to train 8 svm predictor
 num_frames = 5*np.arange(1,9)
@@ -50,27 +55,34 @@ pred_logr = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 acc_even = np.zeros(num_frames.shape[0])
 acc_disc = np.zeros(num_frames.shape[0])
 acc_logr = np.zeros(num_frames.shape[0])
+# Init time consumption storage
+time_elapsed = np.zeros(num_frames.shape)
 
 for i,nf in enumerate(num_frames):
-  Xtr, ytr = utils.prepImageData(
+  # On your mark
+  start_t = time.time()
+  # Prepare data for model feed in
+  Xtr, ytr = utils.prepJointData(
     train_data,
-    train_classes,
+    train_labels,
+    initid_train,
     nf,
     shuffle=True)
-  Xte, yte = utils.prepImageData(
+  Xte, yte = utils.prepJointData(
     test_data,
-    test_classes,
+    test_labels,
+    initid_test,
     nf)
   # Build MLP classifier and make prediction
-  layer1 = np.array([128, 256, 512, 1024])
-  layer2 = np.array([128, 256, 512, 1024])
+  layer1 = np.array([16, 64, 128, 512])
+  layer2 = np.array([16, 64, 128, 512])
   score_train =  np.zeros(layer1.shape[0]*layer2.shape[0])
   score_test = np.zeros(layer1.shape[0]*layer2.shape[0])
   train_input_fn = tf.estimator.inputs.numpy_input_fn(
     x={"x": Xtr},
     y=ytr,
-    batch_size=64,
-    num_epochs=None,
+    batch_size=128,
+    num_epochs=256,
     shuffle=True
   )
   test_input_fn = tf.estimator.inputs.numpy_input_fn(
@@ -82,24 +94,16 @@ for i,nf in enumerate(num_frames):
   ct = 0 # counter
   for l1 in layer1:
     for l2 in layer2:
-      feat_cols = [
-        tf.feature_column.numeric_column(
-          key="x",
-          shape=[Xtr.shape[1]]
-        )
-      ]
+      feat_cols = [tf.feature_column.numeric_column(key="x", shape=[75])]
       hid_units = [l1, l2]
       classifier = tf.estimator.DNNClassifier(
         feature_columns = feat_cols,
         hidden_units=hid_units,
         optimizer=tf.train.AdamOptimizer(1e-3),
         n_classes=9,
-        model_dir="/tmp/pitch2dv0_color_mlp_frame{}_{}-{}".format(nf, l1, l2)
+        model_dir="/tmp/pitch2dv0_mlp_frame{}_{}-{}".format(nf, l1, l2)
       )   
-      classifier.train(
-        input_fn=train_input_fn,
-        steps=20000
-      )
+      classifier.train(input_fn=train_input_fn)
       score_train[ct] = classifier.evaluate(
         input_fn=tf.estimator.inputs.numpy_input_fn(
         x={"x": Xtr},
@@ -113,16 +117,16 @@ for i,nf in enumerate(num_frames):
       print("{} frames, testing accuracy: {} @ layer1: {} / layer2: {}".format(nf, score_test[ct], l1, l2))
       ct += 1
   # Find best l1, l2 combination for current frames setting
-  ind_max = np.argmax(score_test)
-  best_layers[i] = np.array([layer1[int(ind_max/layer2.shape[0])], layer2[int(ind_max%layer2.shape[0])]])
-  high_score_train[i] = score_train[ind_max]
-  high_score_test[i] = score_test[ind_max]
+  bli = np.argmax(score_test)
+  best_layers[i] = np.array([layer1[int(bli/layer2.shape[0])], layer2[int(bli%layer2.shape[0])]])
+  high_score_train[i] = score_train[bli]
+  high_score_test[i] = score_test[bli]
   # Predictions on all frames
   best_classifier = tf.estimator.DNNClassifier(
     feature_columns = feat_cols,
     hidden_units=best_layers[i],
     n_classes=9,
-    model_dir="/tmp/pitch2dv0_color_mlp_frame{}_{}-{}".format(nf, best_layers[i][0], best_layers[i][1])
+    model_dir="/tmp/pitch2dv0_mlp_frame{}_{}-{}".format(nf, best_layers[i][0], best_layers[i][1])
   )
   indte = range(Xte.shape[0])
   predictions = best_classifier.predict(input_fn=test_input_fn)
@@ -150,6 +154,10 @@ for i,nf in enumerate(num_frames):
   pred_logr[i] = utils.vote(clste, nf, vote_opt="logr")
   # Calculate logarithm prediction accuracy
   acc_logr[i] = np.sum(pred_logr[i]==test_labels)/num_examples_test
+  # Times up
+  end_t = time.time()
+  time_elapsed[i] = end_t - start_t
+  print("Training and testing with {} frames consumed {:g} seconds".format(nf, time_elapsed[i]))
 
 # Find best prediction
 pred_accs = np.array([acc_even, acc_disc, acc_logr])
@@ -164,17 +172,20 @@ else:
   high_prediction = pred_logr[ind[1]]
   
 # Save frame-wise and trial-wise accuracies in pandas DataFrmae
-df = pd.DataFrame({
-  "frames": num_frames,
-  "layer1": best_layers[:,0],
-  "layer2": best_layers[:,1],
-  "score_train": high_score_train,
-  "score_test": high_score_test,
-  "accuracy_even": acc_even,
-  "accuracy_disc": acc_disc,
-  "accuracy_logr": acc_even
-  })
-dffilename = os.path.join(result_path, "color_mlp_scores.csv")
+df = pd.DataFrame(
+  {
+    "frames": num_frames,
+    "layer1": best_layers[:,0],
+    "layer2": best_layers[:,1],
+    "score_train": high_score_train,
+    "score_test": high_score_test,
+    "accuracy_even": acc_even,
+    "accuracy_disc": acc_disc,
+    "accuracy_logr": acc_even,
+    "time_consume": time_elapsed
+  }
+)
+dffilename = os.path.join(result_path, "joint_mlp_scores.csv")
 if not os.path.exists(os.path.dirname(dffilename)):
   os.makedirs(os.path.dirname(dffilename))
 df.to_csv(dffilename)
@@ -191,21 +202,15 @@ utils.plotAccBar(high_score_train, high_score_test, num_frames)
 
 # Save predictions to files
 # Save even weighted predictions
-predevenfilename = os.path.join(result_path, "color_mlp_pred_even.txt")
+predevenfilename = os.path.join(result_path, "joint_mlp_pred_even.txt")
 if not os.path.exists(os.path.dirname(predevenfilename)):
   os.makedirs(os.path.dirname(predevenfilename))
 np.savetxt(predevenfilename, pred_even, fmt="%d")
 # Save discont weighted predictions
-preddiscfilename = os.path.join(result_path, "color_mlp_pred_disc.txt")
-if not os.path.exists(os.path.dirname(preddiscfilename)):
-  os.makedirs(os.path.dirname(preddiscfilename))
+preddiscfilename = os.path.join(result_path, "joint_mlp_pred_disc.txt")
 np.savetxt(preddiscfilename, pred_disc, fmt="%d")
 # Save logarithm weighted predictions
-predlogrfilename = os.path.join(result_path, "color_mlp_pred_logr.txt")
-if not os.path.exists(os.path.dirname(predlogrfilename)):
-  os.makedirs(os.path.dirname(predlogrfilename))
+predlogrfilename = os.path.join(result_path, "joint_mlp_pred_logr.txt")
 np.savetxt(predlogrfilename, pred_logr, fmt="%d")
 
-# Times up
-end_t = time.time()
-print("Total running time: {:g} seconds".format(end_t - start_t))
+

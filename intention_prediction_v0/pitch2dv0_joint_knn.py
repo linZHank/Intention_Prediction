@@ -1,4 +1,4 @@
-"""Test knn on pitch2dv0"""
+"""Use k-nearest neighbors on pitch2dv0 joint data"""
 
 from __future__ import absolute_import
 from __future__ import division
@@ -25,26 +25,24 @@ result_path= "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data/result{}".
 # Load train data
 train_data = spio.loadmat(train_path + "joint_train.mat")["joint_train"]
 num_examples_train = train_data.shape[0]
-initid_train = utils.detectInit(train_data, offset=10)
+initid_train = utils.detectInit(train_data)
 train_data = train_data.reshape(num_examples_train,150,75)
 train_classes = spio.loadmat(train_path + "labels_train.mat")["labels_train"]
 train_labels = np.argmax(train_classes, axis=1)
 # Load test data
 test_data = spio.loadmat(test_path + "joint_test.mat")["joint_test"]
 num_examples_test = test_data.shape[0]
-initid_test = utils.detectInit(test_data, offset=10)
+initid_test = utils.detectInit(test_data)
 test_data = test_data.reshape(num_examples_test,150,75)
 test_classes = spio.loadmat(test_path + "labels_test.mat")["labels_test"]
 test_labels = np.argmax(test_classes, axis=1)
 
-# On your mark
-start_t = time.time()
-# Use 5, 10, 15,...,40 frames of data to train 8 knn predictor
+# Use 5, 10, 15,...,40 frames of data to train 8 knn classifier
 num_frames = 5*np.arange(1,9)
 # Init best k storage 
 best_k = np.zeros(num_frames.shape).astype(int)
-# Init best predictor storage
-best_predictor = []
+# Init best classifier storage
+best_classifier = []
 # Init highest train score storage
 high_score_train = np.zeros(best_k.shape)
 # Init highest test score storage
@@ -57,8 +55,12 @@ pred_logr = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 acc_even = np.zeros(best_k.shape)
 acc_disc = np.zeros(best_k.shape)
 acc_logr = np.zeros(best_k.shape)
+# Init time consumption storage
+time_elapsed = np.zeros(best_k.shape)
 
 for i,nf in enumerate(num_frames):
+  # On your mark
+  start_t = time.time()
   Xtr, ytr = utils.prepJointData(
     train_data,
     train_labels,
@@ -79,31 +81,36 @@ for i,nf in enumerate(num_frames):
     knn.append(neighbors.KNeighborsClassifier(k+1))
     score_train[k] = knn[k].fit(Xtr, ytr).score(Xtr, ytr)
     score_test[k] = knn[k].fit(Xtr, ytr).score(Xte, yte)
-    print("{} frames, training accuracy: {} @ k={}".format(nf, score_train[k], k+1))
-    print("{} frames, testing accuracy: {} @ k={}".format(nf, score_test[k], k+1))
-    
-  max_index = np.argmax(score_test)
-  best_k[i] = max_index + 1
-  best_predictor.append(knn[max_index])
-  high_score_train[i] = score_train[max_index]
-  high_score_test[i] = score_test[max_index]
-  # Predictions on all frames
-  classes_test = knn[max_index].predict(Xte)
-  # Vote prediction for trials, even weight
+    print("[{}]{} frames, training accuracy: {} @ k={}".format(time.time(), nf, score_train[k], k+1))
+    print("[{}]{} frames, testing accuracy: {} @ k={}".format(time.time(), nf, score_test[k], k+1))
+  # Find best k and best classifier
+  bki = np.argmax(score_test)
+  best_k[i] = bki + 1
+  best_classifier.append(knn[bki])
+  # Compute train, test accuracy using best k
+  high_score_train[i] = score_train[bki]
+  high_score_test[i] = score_test[bki]
+  # Classify all test frames
+  classes_test = knn[bki].predict(Xte)
+  # Vote predictions for trials, even weight
   pred_even[i] = utils.vote(classes_test, nf, vote_opt="even")
   assert pred_even[i].shape == test_labels.shape
-  # Calculate even prediction accuracy
+  # Calculate even predictions accuracy
   acc_even[i] = np.sum(pred_even[i]==test_labels, dtype=np.float32)/num_examples_test
-  # Vote prediction for trials, discount weight
+  # Vote predictions for trials, discount weight
   pred_disc[i] = utils.vote(classes_test, nf, vote_opt="disc")
-  # Calculate discounted prediction accuracy
+  # Calculate discounted predictions accuracy
   acc_disc[i] = np.sum(pred_disc[i]==test_labels, dtype=np.float32)/num_examples_test
-  # Vote prediction for trials, logarithmic weight  
+  # Vote predictions for trials, logarithmic weight  
   pred_logr[i] = utils.vote(classes_test, nf, vote_opt="logr")
-  # Calculate logarithm prediction accuracy
+  # Calculate logarithm predictions accuracy
   acc_logr[i] = np.sum(pred_logr[i]==test_labels)/num_examples_test
+  # Times up
+  end_t = time.time()
+  time_elapsed[i] = end_t - start_t
+  print("Training and testing with {} frames consumed {:g} seconds".format(nf, time_elapsed[i]))
 
-# Find best predictor
+# Find best prediction
 pred_accs = np.array([acc_even, acc_disc, acc_logr])
 ind = np.unravel_index(np.argmax(pred_accs, axis=None), pred_accs.shape)
 assert len(ind) == 2
@@ -115,16 +122,19 @@ elif ind[0] == 1:
 else:
   high_prediction = pred_logr[ind[1]]
   
-# Save frame-wise and trial-wise accuracies in pandas DataFrmae
-df = pd.DataFrame({
-  "frames": num_frames,
-  "neighbors": best_k,
-  "score_train": high_score_train,
-  "score_test": high_score_test,
-  "accuracy_even": acc_even,
-  "accuracy_disc": acc_disc,
-  "accuracy_logr": acc_even
-  })
+# Save training and evaluation scores in pandas DataFrmae
+df = pd.DataFrame(
+  {
+    "frames": num_frames,
+    "neighbors": best_k,
+    "score_train": high_score_train,
+    "score_test": high_score_test,
+    "accuracy_even": acc_even,
+    "accuracy_disc": acc_disc,
+    "accuracy_logr": acc_even,
+    "time_consume": time_elapsed
+  }
+)
 dffilename = os.path.join(result_path, "joint_knn_scores.csv")
 if not os.path.exists(os.path.dirname(dffilename)):
   os.makedirs(os.path.dirname(dffilename))

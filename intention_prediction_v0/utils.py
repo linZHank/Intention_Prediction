@@ -8,10 +8,11 @@ import os
 import glob
 import matplotlib.pyplot as plt
 import itertools
+from sklearn.preprocessing import StandardScaler
 
 num_frames = 150
 
-def loadImages(name, imformat=1, scale=1):
+def loadImages(name, offset=10, imformat=1, scale=1):
   """Load images as numpy array
   
   Args:
@@ -32,8 +33,8 @@ def loadImages(name, imformat=1, scale=1):
     trial_paths = sorted(glob.glob(os.path.join(tarp, "*")))
     for trip in trial_paths:
       # extract from 5th to 45th frames in a trial
-      image_paths = sorted(glob.glob(os.path.join(trip, "*.png")))[5:45]
-      label = int(tarp.split("/")[-1][-1])-1
+      image_paths = sorted(glob.glob(os.path.join(trip, "*.png")))[offset:offset+40]
+      label = int(tarp.split("/")[-1][-1])-1 # "/.../intent08" -> "intent08" -> 8 -> 7
       labels.append(label)
       for imgp in image_paths:
         img = cv2.imread(imgp, imformat)
@@ -48,7 +49,7 @@ def loadImages(name, imformat=1, scale=1):
 
   return images, labels, classes
   
-def detectInit(joint_vectors):
+def detectInit(joint_vectors, offset=10):
   # reshape(num_examples, 11250) to (num_examples, 150, 75)
   joint_matrix = joint_vectors.reshape(
     joint_vectors.shape[0], # trial
@@ -68,9 +69,9 @@ def detectInit(joint_vectors):
       else:
         inc_inarow = 0
       if inc_inarow > 20:
-        start_id[i] = j - 20 + 4
+        start_id[i] = j - 20 + offset
         # in case pitch started too late
-        if start_id[i] > 99:
+        if start_id[i] > 110:
           start_id[i] = 110
         break
       d0 = d
@@ -110,7 +111,7 @@ def vote(classes, num_frames, vote_opt="even"):
 
   return prediction
 
-def prepJointData(raw_data, raw_labels, init_id, num_frames, shuffle=False):
+def prepJointData(raw_data, raw_labels, init_id, num_frames, std_scale=True, shuffle=False):
   """Prepare joint data for training and testing
 
      Args:
@@ -133,6 +134,9 @@ def prepJointData(raw_data, raw_labels, init_id, num_frames, shuffle=False):
     y.append(example_labels)
   X = np.array(X).reshape(num_examples*num_frames, -1)
   y = np.array(y).reshape(X.shape[0], )
+  if std_scale:
+    scaler = StandardScaler()
+    X = scaler.fit_transform(X)
   if shuffle:
     p = np.random.permutation(X.shape[0]) # generate shuffled index
     X = X[p]
@@ -140,7 +144,7 @@ def prepJointData(raw_data, raw_labels, init_id, num_frames, shuffle=False):
 
   return X, y
 
-def prepImageData(img_arrays, img_labels, num_frames, shuffle=False):
+def prepImageData(img_arrays, img_labels, num_frames, std_scale=True, shuffle=False):
   """Preprocessing image data for training and testing
      
   Args:
@@ -161,6 +165,9 @@ def prepImageData(img_arrays, img_labels, num_frames, shuffle=False):
     ind_del += idel
   X = np.delete(img_arrays, ind_del, axis=0) 
   y = np.delete(img_labels, ind_del, axis=0)
+  if std_scale:
+    scaler = StandardScaler()
+    X = scaler.fit_transform(X)
   if shuffle:
     p = np.random.permutation(X.shape[0]) # generate shuffled index
     X = X[p]
