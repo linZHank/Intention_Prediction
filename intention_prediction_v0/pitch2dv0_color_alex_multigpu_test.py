@@ -230,9 +230,14 @@ pred_logr = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 acc_even = np.zeros(num_frames.shape[0])
 acc_disc = np.zeros(num_frames.shape[0])
 acc_logr = np.zeros(num_frames.shape[0])
+# Init time consumption storage
+time_elapsed = np.zeros(num_frames.shape)
 
 # Main
 for i,nf in enumerate(num_frames):
+  # On your mark
+  start_t = time.time()
+  # Prepare data for model feed in
   Xtr, ytr = utils.prepImageData(
     train_data,
     train_classes,
@@ -260,13 +265,13 @@ for i,nf in enumerate(num_frames):
     x={"x": Xtr},
     y=ytr,
     batch_size=128,
-    num_epochs=None,
+    num_epochs=128,
     shuffle=True,
     num_threads=8
   )
   classifier.train(
     input_fn=train_input_fn,
-    steps=nf*500,
+    # steps=nf*500,
     hooks=[logging_hook]
   )
   high_score_train[i] = classifier.evaluate(

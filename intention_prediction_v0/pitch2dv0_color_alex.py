@@ -199,8 +199,6 @@ def alexnet_model_fn(features, labels, mode):
       mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
 
-start_t = time.time()
-# Load data
 train_data, train_labels, train_classes = utils.loadImages(
   name="train",
   imformat=1,
@@ -229,9 +227,14 @@ pred_logr = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 acc_even = np.zeros(num_frames.shape[0])
 acc_disc = np.zeros(num_frames.shape[0])
 acc_logr = np.zeros(num_frames.shape[0])
+# Init time consumption storage
+time_elapsed = np.zeros(num_frames.shape)
 
 # Main
 for i,nf in enumerate(num_frames):
+  # On your mark
+  start_t = time.time()
+  # Prepare data for model feed in
   Xtr, ytr = utils.prepImageData(
     train_data,
     train_classes,
@@ -259,13 +262,13 @@ for i,nf in enumerate(num_frames):
     x={"x": Xtr},
     y=ytr,
     batch_size=128,
-    num_epochs=None,
+    num_epochs=128,
     shuffle=True,
     num_threads=8
   )
   classifier.train(
     input_fn=train_input_fn,
-    steps=nf*500,
+    # steps=nf*500,
     hooks=[logging_hook]
   )
   high_score_train[i] = classifier.evaluate(
@@ -343,7 +346,7 @@ df = pd.DataFrame(
     "time_consume": time_elapsed
   }
 )
-dffilename = os.path.join(result_path, "color_alex_scores.csv")
+dffilename = os.path.join(result_path, "color_alex2g_scores.csv")
 if not os.path.exists(os.path.dirname(dffilename)):
   os.makedirs(os.path.dirname(dffilename))
 df.to_csv(dffilename)
@@ -360,14 +363,14 @@ utils.plotAccBar(high_score_train, high_score_test, num_frames)
 
 # Save predictions to files
 # Save even weighted predictions
-predevenfilename = os.path.join(result_path, "color_alex_pred_even.txt")
+predevenfilename = os.path.join(result_path, "color_alex2g_pred_even.txt")
 if not os.path.exists(os.path.dirname(predevenfilename)):
   os.makedirs(os.path.dirname(predevenfilename))
 np.savetxt(predevenfilename, pred_even, fmt="%d")
 # Save discont weighted predictions
-preddiscfilename = os.path.join(result_path, "color_alex_pred_disc.txt")
+preddiscfilename = os.path.join(result_path, "color_alex2g_pred_disc.txt")
 np.savetxt(preddiscfilename, pred_disc, fmt="%d")
 # Save logarithm weighted predictions
-predlogrfilename = os.path.join(result_path, "color_alex_pred_logr.txt")
+predlogrfilename = os.path.join(result_path, "color_alex2g_pred_logr.txt")
 np.savetxt(predlogrfilename, pred_logr, fmt="%d")
 
