@@ -50,10 +50,12 @@ high_score_test = np.zeros(best_kernel.shape)
 pred_even = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 pred_disc = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
 pred_logr = np.zeros((num_frames.shape[0], test_labels.shape[0])).astype(int)
-p# Init prediction accuracy storage
+# Init prediction accuracy storage
 acc_even = np.zeros(num_frames.shape)
 acc_disc = np.zeros(num_frames.shape)
 acc_logr = np.zeros(num_frames.shape)
+# Init time consumption storage
+time_elapsed = np.zeros(best_kernel.shape)
 
 for i,nf in enumerate(num_frames):
   # On your mark

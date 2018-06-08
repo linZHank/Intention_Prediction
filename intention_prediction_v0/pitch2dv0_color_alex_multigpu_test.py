@@ -200,7 +200,6 @@ def alexnet_model_fn(features, labels, mode):
       mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
 
-start_t = time.time()
 # Load data
 train_data, train_labels, train_classes = utils.loadImages(
   name="train",
@@ -271,7 +270,7 @@ for i,nf in enumerate(num_frames):
   )
   classifier.train(
     input_fn=train_input_fn,
-    # steps=nf*500,
+    # steps=nf*1000,
     hooks=[logging_hook]
   )
   high_score_train[i] = classifier.evaluate(

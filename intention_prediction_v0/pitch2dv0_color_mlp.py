@@ -20,7 +20,7 @@ import utils
 TODAY = datetime.today().strftime("%Y%m%d")
 result_path= "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data/result{}".format(TODAY)
 
-start_t = time.time()
+
 # Load data
 train_data, train_labels, train_classes = utils.loadImages(
   name="train",
