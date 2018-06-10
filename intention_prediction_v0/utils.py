@@ -26,7 +26,8 @@ def loadImages(name, offset=10, imformat=1, scale=1):
   images = []
   labels = []
   classes = []
-  data_path = "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data"
+  # data_path = "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data"
+  data_path = "/media/linzhank/DATA/Works/Action_Recognition/Data"
   target_paths = sorted(glob.glob(os.path.join(data_path, name, "color", "*")))
   for tarp in target_paths:
     print("Loading {} images from {}".format(name, tarp.split("/")[-1]))

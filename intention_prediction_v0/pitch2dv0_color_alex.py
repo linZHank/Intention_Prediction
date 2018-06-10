@@ -18,7 +18,8 @@ from sklearn.metrics import confusion_matrix
 import utils
 # Specify result storage location
 TODAY = datetime.today().strftime("%Y%m%d")
-result_path= "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data/result{}".format(TODAY)
+# result_path= "/media/linzhank/850EVO_1T/Works/Action_Recognition/Data/result{}".format(TODAY)
+result_path= "/media/linzhank/DATA/Works/Action_Recognition/Data/result{}".format(TODAY)
 
 def alexnet_model_fn(features, labels, mode):
   """Model function for AlexNet"""
