@@ -263,13 +263,13 @@ for i,nf in enumerate(num_frames):
     x={"x": Xtr},
     y=ytr,
     batch_size=128,
-    num_epochs=None,
+    num_epochs=128,
     shuffle=True,
     # num_threads=8
   )
   classifier.train(
     input_fn=train_input_fn,
-    steps=nf*500,
+    # steps=nf*500,
     hooks=[logging_hook]
   )
   high_score_train[i] = classifier.evaluate(
